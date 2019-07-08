@@ -21,6 +21,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 /**
+ * 词法标记
  * Token.
  *
  * @author zhangliang
@@ -28,10 +29,19 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @Getter
 public final class Token {
-    
+
+    /**
+     * 词法标记类型
+     */
     private final TokenType type;
-    
+
+    /**
+     * 词法字面量
+     */
     private final String literals;
-    
+
+    /**
+     * 词法字面量（literals） 在SQL的结束位置
+     */
     private final int endPosition;
 }

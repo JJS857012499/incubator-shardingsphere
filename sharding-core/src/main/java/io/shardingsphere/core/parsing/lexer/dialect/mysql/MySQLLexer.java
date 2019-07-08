@@ -21,6 +21,7 @@ import io.shardingsphere.core.parsing.lexer.Lexer;
 import io.shardingsphere.core.parsing.lexer.analyzer.Dictionary;
 
 /**
+ * mysql Lexical 语法分析器
  * MySQL Lexical analysis.
  *
  * @author zhangliang

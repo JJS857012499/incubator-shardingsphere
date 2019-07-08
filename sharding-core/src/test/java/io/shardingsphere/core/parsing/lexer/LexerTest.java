@@ -32,7 +32,7 @@ public final class LexerTest {
     
     @Test
     public void assertNextTokenForWhitespace() {
-        Lexer lexer = new Lexer("Select  \t \n * from \r\n TABLE_XXX \t", dictionary);
+        Lexer lexer = new Lexer("\t Select  \t \n * from \r\n TABLE_XXX \t", dictionary);
         LexerAssert.assertNextToken(lexer, DefaultKeyword.SELECT, "Select");
         LexerAssert.assertNextToken(lexer, Symbol.STAR, "*");
         LexerAssert.assertNextToken(lexer, DefaultKeyword.FROM, "from");

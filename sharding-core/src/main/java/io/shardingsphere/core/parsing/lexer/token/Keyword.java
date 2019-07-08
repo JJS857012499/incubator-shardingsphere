@@ -18,6 +18,7 @@
 package io.shardingsphere.core.parsing.lexer.token;
 
 /**
+ * 词法关键字标记
  * Keyword interface.
  *
  * @author zhangliang
