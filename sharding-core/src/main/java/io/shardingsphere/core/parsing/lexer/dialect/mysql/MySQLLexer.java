@@ -27,7 +27,10 @@ import io.shardingsphere.core.parsing.lexer.analyzer.Dictionary;
  * @author zhangliang
  */
 public final class MySQLLexer extends Lexer {
-    
+
+    /**
+     * 词法标记字典，因为是mysql，所有加载的是Mysql关键字标记
+     */
     private static Dictionary dictionary = new Dictionary(MySQLKeyword.values());
     
     public MySQLLexer(final String input) {

@@ -42,7 +42,7 @@ public enum Literals implements TokenType {
      */
     CHARS,
     /**
-     * 词法关键字
+     * 词法关键词
      */
     IDENTIFIER,
     /**

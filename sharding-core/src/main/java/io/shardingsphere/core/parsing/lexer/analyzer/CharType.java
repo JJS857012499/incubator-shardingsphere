@@ -54,6 +54,7 @@ public final class CharType {
     }
     
     /**
+     * 是否是字母
      * Adjust is alphabet or not.
      *
      * @param ch to be adjusted char

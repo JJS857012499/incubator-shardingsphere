@@ -25,22 +25,37 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
+ * 词法标记字典
  * Token dictionary.
  *
  * @author zhangliang
  */
 public final class Dictionary {
-    
+
+    /**
+     * 词法标记字典集合
+     */
     private final Map<String, Keyword> tokens = new HashMap<>(1024);
-    
+
+    /**
+     *
+     * @param dialectKeywords
+     */
     public Dictionary(final Keyword... dialectKeywords) {
         fill(dialectKeywords);
     }
-    
+
+    /**
+     * 填充标记关键字
+     * 加入默认标记关键字后再加入指定的标记关键字
+     * @param dialectKeywords
+     */
     private void fill(final Keyword... dialectKeywords) {
+        //加入默认标记关键字
         for (DefaultKeyword each : DefaultKeyword.values()) {
             tokens.put(each.name(), each);
         }
+        //加入指定的标记关键字
         for (Keyword each : dialectKeywords) {
             tokens.put(each.toString(), each);
         }

@@ -27,7 +27,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Lexical 语法分析器
+ * Lexical 词法分析器
  * Lexical analysis.
  *
  * @author zhangliang
@@ -150,7 +150,8 @@ public class Lexer {
     }
 
     private boolean isNumberBegin() {
-        return CharType.isDigital(getCurrentChar(0)) || ('.' == getCurrentChar(0) && CharType.isDigital(getCurrentChar(1)) && !isIdentifierBegin(getCurrentChar(-1))
+        return CharType.isDigital(getCurrentChar(0))
+                || ('.' == getCurrentChar(0) && CharType.isDigital(getCurrentChar(1)) && !isIdentifierBegin(getCurrentChar(-1))
                 || ('-' == getCurrentChar(0) && ('.' == getCurrentChar(1) || CharType.isDigital(getCurrentChar(1)))));
     }
 

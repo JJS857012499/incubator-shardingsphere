@@ -125,6 +125,10 @@ public final class Tokenizer {
     }
 
     /**
+     * 扫描词法变量
+     * 例如：
+     * select * from commodity.mall_commodity_info where PRODUCT_ID=@id 的 @id
+     * select @@version 的 @@version
      * scan variable.
      *
      * @return variable token
@@ -145,11 +149,14 @@ public final class Tokenizer {
     }
 
     /**
+     * 扫描 标识符
      * scan identifier.
      *
      * @return identifier token
      */
     public Token scanIdentifier() {
+
+        // `字段`， 例如 select `id` from table_xx 中的 `id`
         if ('`' == charAt(offset)) {
             int length = getLengthUntilTerminatedChar('`');
             return new Token(Literals.IDENTIFIER, input.substring(offset, offset + length), offset + length);
@@ -162,17 +169,28 @@ public final class Tokenizer {
             int length = getLengthUntilTerminatedChar(']');
             return new Token(Literals.IDENTIFIER, input.substring(offset, offset + length), offset + length);
         }
+
         int length = 0;
         while (isIdentifierChar(charAt(offset + length))) {
             length++;
         }
         String literals = input.substring(offset, offset + length);
         if (isAmbiguousIdentifier(literals)) {
+            // 模棱两可的， order 或者 group
+            //如果空格后面跟着 by 关键字 则TokenType是dictionary里面的KeyWord， 否则Literals.IDENTIFIER
             return new Token(processAmbiguousIdentifier(offset + length, literals), literals, offset + length);
         }
+        // TokenType：根据literals 获取 dictionary里面的Keyword， 否则为默认Literals.IDENTIFIER
         return new Token(dictionary.findTokenType(literals, Literals.IDENTIFIER), literals, offset + length);
     }
 
+    /**
+     * 计算到结束符的长度
+     *
+     * @param terminatedChar
+     * @return
+     * @see #hasEscapeChar,  select * from table_xx as `a``b` 这里连续的"``"并非结束符，如果此时传递的是"'",则会误判，所以这里加了hasEscapeChar判断
+     */
     private int getLengthUntilTerminatedChar(final char terminatedChar) {
         int length = 1;
         while (terminatedChar != charAt(offset + length) || hasEscapeChar(terminatedChar, offset + length)) {
@@ -187,6 +205,13 @@ public final class Tokenizer {
         return length + 1;
     }
 
+    /**
+     * 是否有 Escape 字符
+     *
+     * @param charIdentifier
+     * @param offset
+     * @return
+     */
     private boolean hasEscapeChar(final char charIdentifier, final int offset) {
         return charIdentifier == charAt(offset) && charIdentifier == charAt(offset + 1);
     }
@@ -195,10 +220,25 @@ public final class Tokenizer {
         return CharType.isAlphabet(ch) || CharType.isDigital(ch) || '_' == ch || '$' == ch || '#' == ch;
     }
 
+    /**
+     * 是否 order 或者 group 关键字标记
+     *
+     * @param literals
+     * @return
+     */
     private boolean isAmbiguousIdentifier(final String literals) {
         return DefaultKeyword.ORDER.name().equalsIgnoreCase(literals) || DefaultKeyword.GROUP.name().equalsIgnoreCase(literals);
     }
 
+
+    /**
+     * 处理order 或者 group 关键字标记
+     * 如果后面跟着 by 关键字标记，则返回 dictionary获取的Keyword,否则返回Literals.IDENTIFIER
+     *
+     * @param offset
+     * @param literals
+     * @return
+     */
     private TokenType processAmbiguousIdentifier(final int offset, final String literals) {
         int i = 0;
         while (CharType.isWhitespace(charAt(offset + i))) {
@@ -217,6 +257,7 @@ public final class Tokenizer {
      */
     public Token scanHexDecimal() {
         int length = HEX_BEGIN_SYMBOL_LENGTH;
+        //处理负号
         if ('-' == charAt(offset + length)) {
             length++;
         }
