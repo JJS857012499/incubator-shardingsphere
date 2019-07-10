@@ -18,6 +18,7 @@
 package io.shardingsphere.core.routing.strategy;
 
 /**
+ * 分片策略算法
  * Sharding algorithm interface.
  * 
  * @author zhangliang

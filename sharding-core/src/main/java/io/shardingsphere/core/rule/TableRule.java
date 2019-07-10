@@ -17,17 +17,7 @@
 
 package io.shardingsphere.core.rule;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-
 import com.google.common.base.Preconditions;
-
 import io.shardingsphere.api.config.rule.TableRuleConfiguration;
 import io.shardingsphere.core.exception.ShardingException;
 import io.shardingsphere.core.keygen.KeyGenerator;
@@ -38,7 +28,10 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.ToString;
 
+import java.util.*;
+
 /**
+ * 表规则配置
  * Table rule configuration.
  *
  * @author zhangliang
@@ -46,28 +39,44 @@ import lombok.ToString;
 @Getter
 @ToString(exclude = "dataNodeIndexMap")
 public final class TableRule {
-    
+
+    /**
+     * 数据分片的逻辑表，对于水平分割的库（表），同一类库（表）的统称
+     * 例如，order表拆分为10表[order_0 ~ order_9], 他们的逻辑表名为order
+     */
     private final String logicTable;
-    
+
+    /**
+     * 数据单元数组
+     */
     private final List<DataNode> actualDataNodes;
-    
+
+    /**
+     * <数据单元，数据库index>
+     */
     @Getter(AccessLevel.NONE)
     private final Map<DataNode, Integer> dataNodeIndexMap;
-    
+
+    /**
+     * 数据库分片策略
+     */
     private final ShardingStrategy databaseShardingStrategy;
-    
+
+    /**
+     * 数据表分片策略
+     */
     private final ShardingStrategy tableShardingStrategy;
-    
+
     private final String generateKeyColumn;
-    
+
     private final KeyGenerator keyGenerator;
-    
+
     private final String logicIndex;
-    
+
     private final Collection<String> actualDatasourceNames = new LinkedHashSet<>();
-    
+
     private final Map<String, Collection<String>> datasourceActualTables = new HashMap<>();
-    
+
     public TableRule(final String defaultDataSourceName, final String logicTableName) {
         logicTable = logicTableName.toLowerCase();
         actualDataNodes = Collections.singletonList(new DataNode(defaultDataSourceName, logicTableName));
@@ -79,7 +88,7 @@ public final class TableRule {
         keyGenerator = null;
         logicIndex = null;
     }
-    
+
     public TableRule(final Collection<String> dataSourceNames, final String logicTableName) {
         logicTable = logicTableName.toLowerCase();
         dataNodeIndexMap = new HashMap<>(dataSourceNames.size(), 1);
@@ -90,7 +99,7 @@ public final class TableRule {
         keyGenerator = null;
         logicIndex = null;
     }
-    
+
     public TableRule(final TableRuleConfiguration tableRuleConfig, final ShardingDataSourceNames shardingDataSourceNames) {
         Preconditions.checkNotNull(tableRuleConfig.getLogicTable(), "Logic table cannot be null.");
         logicTable = tableRuleConfig.getLogicTable().toLowerCase();
@@ -104,11 +113,11 @@ public final class TableRule {
         keyGenerator = tableRuleConfig.getKeyGenerator();
         logicIndex = null == tableRuleConfig.getLogicIndex() ? null : tableRuleConfig.getLogicIndex().toLowerCase();
     }
-    
+
     private boolean isEmptyDataNodes(final List<String> dataNodes) {
         return null == dataNodes || dataNodes.isEmpty();
     }
-    
+
     private List<DataNode> generateDataNodes(final String logicTable, final Collection<String> dataSourceNames) {
         List<DataNode> result = new LinkedList<>();
         int index = 0;
@@ -122,7 +131,7 @@ public final class TableRule {
         }
         return result;
     }
-    
+
     private List<DataNode> generateDataNodes(final List<String> actualDataNodes, final Collection<String> dataSourceNames) {
         List<DataNode> result = new LinkedList<>();
         int index = 0;
@@ -139,7 +148,7 @@ public final class TableRule {
         }
         return result;
     }
-    
+
     /**
      * Get data node groups.
      *
@@ -156,7 +165,7 @@ public final class TableRule {
         }
         return result;
     }
-    
+
     /**
      * Get actual data source names.
      *
@@ -165,14 +174,14 @@ public final class TableRule {
     public Collection<String> getActualDatasourceNames() {
         return actualDatasourceNames;
     }
-    
+
     private void fillActualDatasourceNames() {
         for (DataNode each : actualDataNodes) {
             actualDatasourceNames.add(each.getDataSourceName());
             addActualTable(each.getDataSourceName(), each.getTableName());
         }
     }
-    
+
     private void addActualTable(final String datasourceName, final String tableName) {
         Collection<String> actualTables = datasourceActualTables.get(datasourceName);
         if (null == actualTables) {
@@ -181,7 +190,7 @@ public final class TableRule {
         }
         actualTables.add(tableName);
     }
-    
+
     /**
      * Get actual table names via target data source name.
      *
@@ -195,12 +204,12 @@ public final class TableRule {
         }
         return result;
     }
-    
+
     int findActualTableIndex(final String dataSourceName, final String actualTableName) {
         DataNode dataNode = new DataNode(dataSourceName, actualTableName);
         return dataNodeIndexMap.containsKey(dataNode) ? dataNodeIndexMap.get(dataNode) : -1;
     }
-    
+
     boolean isExisted(final String actualTableName) {
         for (DataNode each : actualDataNodes) {
             if (each.getTableName().equalsIgnoreCase(actualTableName)) {

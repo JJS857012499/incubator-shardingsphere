@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.TreeSet;
 
 /**
+ * 数据库和表的分片配置
  * Databases and tables sharding rule configuration.
  *
  * @author zhangliang

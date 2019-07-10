@@ -27,6 +27,7 @@ import lombok.ToString;
 import java.util.List;
 
 /**
+ * 数据单元，分片数据的最小单元，由数据源名称和数据库表名组成
  * Sharding data unit node.
  *
  * @author zhangliang
@@ -35,11 +36,20 @@ import java.util.List;
 @Getter
 @ToString
 public final class DataNode {
-    
+
+    /**
+     * 数据库名和表名之间的分隔符
+     */
     private static final String DELIMITER = ".";
-    
+
+    /**
+     * 数据源名
+     */
     private final String dataSourceName;
-    
+
+    /**
+     * 表名称
+     */
     private final String tableName;
     
     /**
