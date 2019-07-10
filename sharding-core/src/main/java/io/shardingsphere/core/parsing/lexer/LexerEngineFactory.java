@@ -27,6 +27,7 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
 /**
+ * LexerEngine 工厂类
  * Lexical analysis factory.
  *
  * @author zhangliang

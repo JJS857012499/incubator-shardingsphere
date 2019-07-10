@@ -80,14 +80,15 @@ public final class LexerEngine {
     }
     
     /**
+     * 跳过括号内的所有语法标记
      * skip all tokens that inside parentheses.
      *
      * @param sqlStatement SQL statement
-     * @return skipped string
+     * @return skipped string 跳过的字符串
      */
     public String skipParentheses(final SQLStatement sqlStatement) {
         StringBuilder result = new StringBuilder("");
-        int count = 0;
+        int count = 0; //记录多重括号问题，左括号加一，右括号减一，当count为0的时候才是闭合的情况
         if (Symbol.LEFT_PAREN == lexer.getCurrentToken().getType()) {
             final int beginPosition = lexer.getCurrentToken().getEndPosition();
             result.append(Symbol.LEFT_PAREN.getLiterals());
@@ -96,9 +97,13 @@ public final class LexerEngine {
                 if (equalAny(Symbol.QUESTION)) {
                     sqlStatement.increaseParametersIndex();
                 }
+
+                //结束符，或者当前是右括号并且已经闭合的情况，跳出循环
                 if (Assist.END == lexer.getCurrentToken().getType() || (Symbol.RIGHT_PAREN == lexer.getCurrentToken().getType() && 0 == count)) {
                     break;
                 }
+
+                //左括号加一，右括号减一
                 if (Symbol.LEFT_PAREN == lexer.getCurrentToken().getType()) {
                     count++;
                 } else if (Symbol.RIGHT_PAREN == lexer.getCurrentToken().getType()) {
