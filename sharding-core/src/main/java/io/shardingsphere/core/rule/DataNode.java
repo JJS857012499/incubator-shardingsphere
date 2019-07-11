@@ -55,7 +55,7 @@ public final class DataNode {
     /**
      * Constructs a data node with well-formatted string.
      *
-     * @param dataNode string of data node. use {@code .} to split data source name and table name.
+     * @param dataNode string of data node. use {@code .} to split data source name and table name. 例如 db_0.table_0
      */
     public DataNode(final String dataNode) {
         if (!isValidDataNode(dataNode)) {

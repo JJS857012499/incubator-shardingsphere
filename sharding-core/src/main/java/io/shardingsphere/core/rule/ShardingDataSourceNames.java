@@ -25,24 +25,31 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 
 /**
+ * 分片数据源名称
  * Sharding data source names.
- * 
+ *
  * <p>Will convert actual data source names to master-slave data source name.</p>
- * 
+ *
  * @author zhangliang
  */
 public final class ShardingDataSourceNames {
-    
+
+    /**
+     * 分片规则配置
+     */
     private final ShardingRuleConfiguration shardingRuleConfig;
-    
+
+    /**
+     * 数据源名称
+     */
     @Getter
     private final Collection<String> dataSourceNames;
-    
+
     public ShardingDataSourceNames(final ShardingRuleConfiguration shardingRuleConfig, final Collection<String> rawDataSourceNames) {
         this.shardingRuleConfig = shardingRuleConfig;
         dataSourceNames = getAllDataSourceNames(rawDataSourceNames);
     }
-    
+
     private Collection<String> getAllDataSourceNames(final Collection<String> dataSourceNames) {
         Collection<String> result = new LinkedHashSet<>(dataSourceNames);
         for (MasterSlaveRuleConfiguration each : shardingRuleConfig.getMasterSlaveRuleConfigs()) {
@@ -52,17 +59,19 @@ public final class ShardingDataSourceNames {
         }
         return result;
     }
-    
+
     /**
+     * 获取默认的数据源名称
      * Get default data source name.
-     * 
+     *
      * @return default data source name
      */
     public String getDefaultDataSourceName() {
         return 1 == dataSourceNames.size() ? dataSourceNames.iterator().next() : shardingRuleConfig.getDefaultDataSourceName();
     }
-    
+
     /**
+     * 获取真实主库的数据源名称（分片数据库中，存在主从数据库）
      * Get raw master data source name.
      *
      * @param dataSourceName data source name

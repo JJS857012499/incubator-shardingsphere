@@ -23,6 +23,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
+ * 表规则配置
  * Table rule configuration.
  * 
  * @author zhangliang
@@ -30,9 +31,15 @@ import lombok.Setter;
 @Getter
 @Setter
 public final class TableRuleConfiguration implements RuleConfiguration {
-    
+
+    /**
+     * 逻辑表
+     */
     private String logicTable;
-    
+
+    /**
+     * 数据节点，可以用el表达式，如ds${0..1}.table_${0..2}
+     */
     private String actualDataNodes;
     
     private ShardingStrategyConfiguration databaseShardingStrategyConfig;

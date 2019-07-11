@@ -18,6 +18,7 @@
 package io.shardingsphere.api.config.strategy;
 
 /**
+ * 分片策略配置接口
  * Sharding strategy configuration.
  * 
  * @author zhangliang

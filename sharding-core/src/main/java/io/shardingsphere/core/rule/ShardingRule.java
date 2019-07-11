@@ -41,7 +41,7 @@ import java.util.List;
 import java.util.TreeSet;
 
 /**
- * 数据库和表的分片配置
+ * 数据库和表的分片
  * Databases and tables sharding rule configuration.
  *
  * @author zhangliang
@@ -50,27 +50,51 @@ import java.util.TreeSet;
  */
 @Getter
 public class ShardingRule {
-    
+
+    /**
+     * 分片规则配置
+     */
     private final ShardingRuleConfiguration shardingRuleConfig;
-    
+
+    /**
+     * 分片规则数据源名称
+     */
     private final ShardingDataSourceNames shardingDataSourceNames;
-    
+
+    /**
+     * 表规则
+     */
     private final Collection<TableRule> tableRules = new LinkedList<>();
-    
+
+    /**
+     * 绑定表规则，把tableRules规组
+     */
     private final Collection<BindingTableRule> bindingTableRules = new LinkedList<>();
-    
+
     private final Collection<String> broadcastTables = new LinkedList<>();
-    
+
+    /**
+     * 默认分库策略
+     */
     private final ShardingStrategy defaultDatabaseShardingStrategy;
-    
+
+    /**
+     * 默认分表策略
+     */
     private final ShardingStrategy defaultTableShardingStrategy;
-    
+
+    /**
+     * 主键生成器
+     */
     private final KeyGenerator defaultKeyGenerator;
-    
+
+    /**
+     * 主从库规则
+     */
     private final Collection<MasterSlaveRule> masterSlaveRules = new LinkedList<>();
-    
+
     private final ParsingResultCache parsingResultCache = new ParsingResultCache();
-    
+
     public ShardingRule(final ShardingRuleConfiguration shardingRuleConfig, final Collection<String> dataSourceNames) {
         Preconditions.checkNotNull(dataSourceNames, "Data sources cannot be null.");
         Preconditions.checkArgument(!dataSourceNames.isEmpty(), "Data sources cannot be empty.");
@@ -96,7 +120,7 @@ public class ShardingRule {
             masterSlaveRules.add(new MasterSlaveRule(each));
         }
     }
-    
+
     /**
      * Find table rule though logic table name.
      *
@@ -111,7 +135,7 @@ public class ShardingRule {
         }
         return Optional.absent();
     }
-    
+
     /**
      * Find table rule though actual table name.
      *
@@ -126,7 +150,7 @@ public class ShardingRule {
         }
         return Optional.absent();
     }
-    
+
     /**
      * Find table rule though logic table name.
      *
@@ -146,7 +170,7 @@ public class ShardingRule {
         }
         throw new ShardingConfigurationException("Cannot find table rule and default data source with logic table: '%s'", logicTableName);
     }
-    
+
     /**
      * Get database sharding strategy.
      *
@@ -160,7 +184,7 @@ public class ShardingRule {
     public ShardingStrategy getDatabaseShardingStrategy(final TableRule tableRule) {
         return null == tableRule.getDatabaseShardingStrategy() ? defaultDatabaseShardingStrategy : tableRule.getDatabaseShardingStrategy();
     }
-    
+
     /**
      * Get table sharding strategy.
      *
@@ -174,7 +198,7 @@ public class ShardingRule {
     public ShardingStrategy getTableShardingStrategy(final TableRule tableRule) {
         return null == tableRule.getTableShardingStrategy() ? defaultTableShardingStrategy : tableRule.getTableShardingStrategy();
     }
-    
+
     /**
      * Adjust logic table is belong to broadcast tables.
      *
@@ -184,7 +208,7 @@ public class ShardingRule {
     public boolean isBroadcastTable(final String logicTable) {
         return broadcastTables.contains(logicTable);
     }
-    
+
     /**
      * Adjust logic tables is all belong to broadcast tables.
      *
@@ -202,7 +226,7 @@ public class ShardingRule {
         }
         return true;
     }
-    
+
     /**
      * Adjust logic tables is all belong to binding tables.
      *
@@ -221,7 +245,7 @@ public class ShardingRule {
         result.addAll(bindingTableRule.get().getAllLogicTables());
         return !result.isEmpty() && result.containsAll(logicTables);
     }
-    
+
     /**
      * Adjust logic tables is all belong to default data source.
      *
@@ -239,7 +263,7 @@ public class ShardingRule {
         }
         return !logicTables.isEmpty();
     }
-    
+
     private Optional<BindingTableRule> findBindingTableRule(final Collection<String> logicTables) {
         for (String each : logicTables) {
             Optional<BindingTableRule> result = findBindingTableRule(each);
@@ -249,7 +273,7 @@ public class ShardingRule {
         }
         return Optional.absent();
     }
-    
+
     /**
      * Get binding table rule via logic table name.
      *
@@ -264,7 +288,7 @@ public class ShardingRule {
         }
         return Optional.absent();
     }
-    
+
     /**
      * Adjust is sharding column or not.
      *
@@ -285,7 +309,7 @@ public class ShardingRule {
         }
         return false;
     }
-    
+
     /**
      * get generated key's column.
      *
@@ -300,7 +324,7 @@ public class ShardingRule {
         }
         return Optional.absent();
     }
-    
+
     /**
      * Generate key.
      *
@@ -317,7 +341,7 @@ public class ShardingRule {
         }
         return defaultKeyGenerator.generateKey();
     }
-    
+
     /**
      * Get logic table name base on logic index name.
      *
@@ -332,7 +356,7 @@ public class ShardingRule {
         }
         throw new ShardingConfigurationException("Cannot find logic table name with logic index name: '%s'", logicIndexName);
     }
-    
+
     /**
      * Find data node by logic table.
      *
@@ -342,7 +366,7 @@ public class ShardingRule {
     public DataNode findDataNode(final String logicTableName) {
         return findDataNode(null, logicTableName);
     }
-    
+
     /**
      * Find data node by data source and logic table.
      *
@@ -363,7 +387,7 @@ public class ShardingRule {
             throw new ShardingConfigurationException("Cannot find actual data node for data source name: '%s' and logic table name: '%s'", dataSourceName, logicTableName);
         }
     }
-    
+
     /**
      * Adjust is logic index or not.
      *
@@ -374,7 +398,7 @@ public class ShardingRule {
     public boolean isLogicIndex(final String logicIndexName, final String logicTableName) {
         return logicIndexName.equals(getTableRuleByLogicTableName(logicTableName).getLogicIndex());
     }
-    
+
     /**
      * Find actual default data source name.
      *
@@ -389,7 +413,7 @@ public class ShardingRule {
         }
         return Optional.of(getMasterDataSourceName(result));
     }
-    
+
     private String getMasterDataSourceName(final String masterSlaveRuleName) {
         for (MasterSlaveRule each : masterSlaveRules) {
             if (each.getName().equals(masterSlaveRuleName)) {
@@ -398,7 +422,7 @@ public class ShardingRule {
         }
         return masterSlaveRuleName;
     }
-    
+
     /**
      * Find master slave rule.
      *
@@ -413,7 +437,7 @@ public class ShardingRule {
         }
         return Optional.absent();
     }
-    
+
     /**
      * Get actual data source name by actual table name.
      *
@@ -430,10 +454,10 @@ public class ShardingRule {
         }
         throw new ShardingException("Cannot found actual data source name of '%s' in sharding rule.", actualTableName);
     }
-    
+
     /**
      * Adjust contains table in sharding rule.
-     * 
+     *
      * @param tableName table name
      * @return contains table in sharding rule or not
      */

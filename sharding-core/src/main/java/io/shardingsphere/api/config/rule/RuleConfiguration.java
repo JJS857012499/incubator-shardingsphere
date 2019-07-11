@@ -18,6 +18,7 @@
 package io.shardingsphere.api.config.rule;
 
 /**
+ * 规则配置信息
  * Rule configuration.
  * 
  * @author panjuan

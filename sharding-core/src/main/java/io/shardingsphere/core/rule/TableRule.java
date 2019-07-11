@@ -31,7 +31,7 @@ import lombok.ToString;
 import java.util.*;
 
 /**
- * 表规则配置
+ * 表规则
  * Table rule configuration.
  *
  * @author zhangliang
@@ -67,14 +67,29 @@ public final class TableRule {
      */
     private final ShardingStrategy tableShardingStrategy;
 
+    /**
+     * 主键字段
+     */
     private final String generateKeyColumn;
 
+    /**
+     * 主键生成器
+     */
     private final KeyGenerator keyGenerator;
 
+    /**
+     * todo
+     */
     private final String logicIndex;
 
+    /**
+     * 真实数据库名称集合
+     */
     private final Collection<String> actualDatasourceNames = new LinkedHashSet<>();
 
+    /**
+     * <真实数据库名称，<真实表名称>>
+     */
     private final Map<String, Collection<String>> datasourceActualTables = new HashMap<>();
 
     public TableRule(final String defaultDataSourceName, final String logicTableName) {
@@ -118,6 +133,13 @@ public final class TableRule {
         return null == dataNodes || dataNodes.isEmpty();
     }
 
+    /**
+     * 生成数据节点
+     *
+     * @param logicTable      逻辑表名称
+     * @param dataSourceNames 数据库名
+     * @return
+     */
     private List<DataNode> generateDataNodes(final String logicTable, final Collection<String> dataSourceNames) {
         List<DataNode> result = new LinkedList<>();
         int index = 0;
@@ -175,6 +197,10 @@ public final class TableRule {
         return actualDatasourceNames;
     }
 
+    /**
+     * 根据 数据节点（actualDataNodes） 填充 真实数据名（actualDatasourceNames） 和 真实数据库表名（datasourceActualTables）
+     *
+     */
     private void fillActualDatasourceNames() {
         for (DataNode each : actualDataNodes) {
             actualDatasourceNames.add(each.getDataSourceName());
@@ -182,6 +208,12 @@ public final class TableRule {
         }
     }
 
+    /**
+     * 添加实际的表 actualTables
+     *
+     * @param datasourceName
+     * @param tableName
+     */
     private void addActualTable(final String datasourceName, final String tableName) {
         Collection<String> actualTables = datasourceActualTables.get(datasourceName);
         if (null == actualTables) {

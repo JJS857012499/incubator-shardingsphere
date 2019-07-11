@@ -26,6 +26,7 @@ import lombok.Setter;
 import java.util.Collection;
 
 /**
+ * 主从规则配置
  * Master-slave rule configuration.
  * 
  * @author zhangliang
@@ -36,12 +37,24 @@ import java.util.Collection;
 @Getter
 @Setter
 public final class MasterSlaveRuleConfiguration implements RuleConfiguration {
-    
+
+    /**
+     * 名称
+     */
     private String name;
-    
+
+    /**
+     * 主库名称
+     */
     private String masterDataSourceName;
-    
+
+    /**
+     * 从库名称（多个）
+     */
     private Collection<String> slaveDataSourceNames;
-    
+
+    /**
+     * 主从负载均衡算法
+     */
     private MasterSlaveLoadBalanceAlgorithm loadBalanceAlgorithm;
 }

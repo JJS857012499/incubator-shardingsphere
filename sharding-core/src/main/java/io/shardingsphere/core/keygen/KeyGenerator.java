@@ -18,6 +18,7 @@
 package io.shardingsphere.core.keygen;
 
 /**
+ * 主键生成接口
  * Key generator interface.
  *
  * @author zhangliang
