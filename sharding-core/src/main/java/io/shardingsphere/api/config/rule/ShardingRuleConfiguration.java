@@ -50,13 +50,25 @@ public final class ShardingRuleConfiguration implements RuleConfiguration {
      * 绑定分组
      */
     private Collection<String> bindingTableGroups = new LinkedList<>();
-    
+
+    /**
+     * 广播表
+     */
     private Collection<String> broadcastTables = new LinkedList<>();
-    
+
+    /**
+     * 默认数据库分片策略配置
+     */
     private ShardingStrategyConfiguration defaultDatabaseShardingStrategyConfig;
-    
+
+    /**
+     * 默认表分片策略配置
+     */
     private ShardingStrategyConfiguration defaultTableShardingStrategyConfig;
-    
+
+    /**
+     * 默认主键生成器
+     */
     private KeyGenerator defaultKeyGenerator;
 
     /**

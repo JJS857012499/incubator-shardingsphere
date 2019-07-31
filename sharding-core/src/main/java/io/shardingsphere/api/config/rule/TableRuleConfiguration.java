@@ -41,14 +41,29 @@ public final class TableRuleConfiguration implements RuleConfiguration {
      * 数据节点，可以用el表达式，如ds${0..1}.table_${0..2}
      */
     private String actualDataNodes;
-    
+
+    /**
+     * 数据库分片策略配置
+     */
     private ShardingStrategyConfiguration databaseShardingStrategyConfig;
-    
+
+    /**
+     * 表分片策略配置
+     */
     private ShardingStrategyConfiguration tableShardingStrategyConfig;
-    
+
+    /**
+     * 主键列名
+     */
     private String keyGeneratorColumnName;
-    
+
+    /**
+     * 主键生成器
+     */
     private KeyGenerator keyGenerator;
-    
+
+    /**
+     * 逻辑索引
+     */
     private String logicIndex;
 }

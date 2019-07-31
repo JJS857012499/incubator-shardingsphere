@@ -71,6 +71,9 @@ public class ShardingRule {
      */
     private final Collection<BindingTableRule> bindingTableRules = new LinkedList<>();
 
+    /**
+     * 广播表
+     */
     private final Collection<String> broadcastTables = new LinkedList<>();
 
     /**
