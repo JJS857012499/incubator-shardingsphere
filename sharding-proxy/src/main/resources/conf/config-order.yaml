@@ -1,0 +1,69 @@
+schemaName: order # schema名称,每个文件都是单独的schema,多个schema则是多个yaml文件,yaml文件命名要求是config-xxxx.yaml格式,虽然没有强制要求,但推荐名称中的xxxx与配置的schemaName保持一致,方便维护
+
+dataSources: # 配置数据源列表,必须是有效的jdbc配置,目前仅支持MySQL与PostgreSQL,另外通过一些未公开(代码中可查,但可能会在未来有变化)的变量,可以配置来兼容其他支持JDBC的数据库,但由于没有足够的测试支持,可能会有严重的兼容性问题,配置时候要求至少有一个
+  order_master:
+    url: jdbc:mysql://192.168.199.11:3308/order?autoReconnect=true&autoReconnectForPools=true&useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull&allowMultiQueries=true&&useSSL=false
+    username: zhidianlife
+    password: zdsh123456
+    connectionTimeoutMilliseconds: 30000
+    idleTimeoutMilliseconds: 60000
+    maxLifetimeMilliseconds: 1800000
+    maxPoolSize: 50
+
+#  order_slave:
+#    url: jdbc:mysql://192.168.199.11:3308/order?autoReconnect=true&autoReconnectForPools=true&useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull&allowMultiQueries=true&&useSSL=false
+#    username: zhidianlife
+#    password: zdsh123456
+#    connectionTimeoutMilliseconds: 30000
+#    idleTimeoutMilliseconds: 60000
+#    maxLifetimeMilliseconds: 1800000
+#    maxPoolSize: 50
+
+shardingRule:
+  # 配置主要分两类,一类是对整个sharding规则所有表生效的默认配置,一个是sharing具体某张表时候的配置
+  # 首先说默认配置
+  masterSlaveRules: # 在shardingRule中也可以配置shardingRule,对分片生效,具体内容与全局masterSlaveRule一致,但语法为:
+    order:
+      masterDataSourceName: order_master
+      slaveDataSourceNames:
+        - order_master
+      loadBalanceAlgorithmClassName: io.shardingsphere.api.algorithm.masterslave.RoundRobinMasterSlaveLoadBalanceAlgorithm
+  defaultDataSourceName: order_master # 这里的数据源允许是dataSources的配置项目或者masterSlaveRules配置的名称,配置为masterSlaveRule的话相当于就是配置读写分离了
+
+  tables:
+    user_order:
+      actualDataNodes: order.user_order_$->{0..63}
+      tableStrategy:
+        standard:
+          shardingColumn: buyer_id
+          preciseAlgorithmClassName: com.zhidian.cloud.common.algorithm.UserOrderTableShardingAlgorithm
+    user_order_product:
+      actualDataNodes: order.user_order_product_$->{0..63}
+      tableStrategy:
+        standard:
+          shardingColumn: buyer_id
+          preciseAlgorithmClassName: com.zhidian.cloud.common.algorithm.UserOrderTableShardingAlgorithm
+    seller_order:
+      actualDataNodes: order.seller_order_$->{0..63}
+      tableStrategy:
+        standard:
+          shardingColumn: storage_id
+          preciseAlgorithmClassName: com.zhidian.cloud.common.algorithm.UserOrderTableShardingAlgorithm
+    seller_order_product:
+      actualDataNodes: order.seller_order_product_$->{0..63}
+      tableStrategy:
+        standard:
+          shardingColumn: storage_id
+          preciseAlgorithmClassName: com.zhidian.cloud.common.algorithm.UserOrderTableShardingAlgorithm
+  bindingTables:
+    - user_order,user_order_product
+    - seller_order,seller_order_product
+  defaultDatabaseStrategy:
+    none:
+  defaultTableStrategy:
+    none:
+  defaultKeyGeneratorClassName: io.shardingsphere.core.keygen.DefaultKeyGenerator
+
+
+
+
