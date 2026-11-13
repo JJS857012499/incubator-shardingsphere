@@ -1,0 +1,145 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.test.e2e.mcp.support.transport.client;
+
+import lombok.RequiredArgsConstructor;
+import org.apache.shardingsphere.test.e2e.mcp.support.transport.MCPInteractionPayloads;
+import org.apache.shardingsphere.test.e2e.mcp.support.transport.MCPInteractionProtocolSupport;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.Map;
+
+/**
+ * HTTP MCP tool client.
+ */
+@RequiredArgsConstructor
+public final class MCPHttpInteractionClient extends AbstractMCPInteractionClient {
+    
+    private static final String INITIALIZE_REQUEST_ID = "init-1";
+    
+    private static final String CLIENT_NAME = "mcp-e2e-http";
+    
+    private static final String CONTENT_TYPE = "application/json";
+    
+    private static final String ACCEPT = "application/json, text/event-stream";
+    
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30L);
+    
+    private final URI endpointUri;
+    
+    private final HttpClient httpClient;
+    
+    private String sessionId;
+    
+    private String actualProtocolVersion;
+    
+    @Override
+    public void open() throws IOException, InterruptedException {
+        if (null != sessionId) {
+            return;
+        }
+        HttpRequest request = createJsonRequestBuilder()
+                .POST(HttpRequest.BodyPublishers.ofString(MCPInteractionProtocolSupport.createJsonRpcRequestBody(
+                        INITIALIZE_REQUEST_ID, "initialize", MCPInteractionProtocolSupport.createInitializeRequestParams(CLIENT_NAME))))
+                .build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (200 != response.statusCode()) {
+            throw new IllegalStateException("Failed to initialize MCP session.");
+        }
+        Map<String, Object> initializePayload = MCPInteractionPayloads.parseJsonPayload(response.body());
+        if (MCPInteractionPayloads.hasJsonRpcError(initializePayload)) {
+            throw new IllegalStateException("Failed to initialize MCP session: "
+                    + MCPInteractionPayloads.getJsonRpcErrorPayload(initializePayload).get("message"));
+        }
+        MCPInteractionPayloads.getRequiredJsonRpcResult(initializePayload);
+        sessionId = response.headers().firstValue("MCP-Session-Id")
+                .orElseThrow(() -> new IllegalStateException("MCP initialize response does not contain MCP-Session-Id header."));
+        actualProtocolVersion = response.headers().firstValue("MCP-Protocol-Version").orElse(MCPInteractionProtocolSupport.PROTOCOL_VERSION);
+        sendNotification("notifications/initialized", Map.of());
+    }
+    
+    @Override
+    public void close() throws IOException, InterruptedException {
+        if (null == sessionId) {
+            return;
+        }
+        HttpRequest request = createJsonRequestBuilder()
+                .header("MCP-Session-Id", sessionId)
+                .header("MCP-Protocol-Version", actualProtocolVersion)
+                .DELETE()
+                .build();
+        httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        sessionId = null;
+        actualProtocolVersion = null;
+    }
+    
+    @Override
+    protected void ensureOpened() {
+        if (null == sessionId) {
+            throw new IllegalStateException("MCP session is not initialized.");
+        }
+    }
+    
+    @Override
+    protected Map<String, Object> sendRequest(final String requestId, final String method, final Map<String, Object> params) throws IOException, InterruptedException {
+        return MCPInteractionPayloads.parseJsonPayload(sendPostRequest(requestId, method, params).body());
+    }
+    
+    @Override
+    protected void sendNotification(final String method, final Map<String, Object> params) throws IOException, InterruptedException {
+        HttpRequest request = createSessionRequestBuilder()
+                .POST(HttpRequest.BodyPublishers.ofString(MCPInteractionProtocolSupport.createJsonRpcNotificationBody(method, params)))
+                .build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (202 != response.statusCode()) {
+            throw new IllegalStateException("MCP notification failed with status " + response.statusCode() + ".");
+        }
+        if (!response.body().isEmpty()) {
+            throw new IllegalStateException("MCP notification response body must be empty.");
+        }
+    }
+    
+    private HttpRequest.Builder createSessionRequestBuilder() {
+        return createJsonRequestBuilder()
+                .header("MCP-Session-Id", sessionId)
+                .header("MCP-Protocol-Version", actualProtocolVersion);
+    }
+    
+    private HttpRequest.Builder createJsonRequestBuilder() {
+        return HttpRequest.newBuilder(endpointUri)
+                .timeout(REQUEST_TIMEOUT)
+                .header("Content-Type", CONTENT_TYPE)
+                .header("Accept", ACCEPT);
+    }
+    
+    private HttpResponse<String> sendPostRequest(final String requestId, final String method, final Map<String, Object> params) throws IOException, InterruptedException {
+        HttpRequest request = createSessionRequestBuilder()
+                .POST(HttpRequest.BodyPublishers.ofString(MCPInteractionProtocolSupport.createJsonRpcRequestBody(requestId, method, params)))
+                .build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (200 != response.statusCode()) {
+            throw new IllegalStateException("MCP request failed with status " + response.statusCode() + ".");
+        }
+        return response;
+    }
+}

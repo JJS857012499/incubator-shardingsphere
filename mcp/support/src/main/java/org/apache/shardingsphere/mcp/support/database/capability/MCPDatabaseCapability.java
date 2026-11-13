@@ -1,0 +1,125 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.mcp.support.database.capability;
+
+import lombok.Getter;
+import org.apache.shardingsphere.database.connector.core.metadata.database.metadata.option.schema.DialectSchemaSemantics;
+import org.apache.shardingsphere.infra.metadata.identifier.DatabaseIdentifierContext;
+import org.apache.shardingsphere.mcp.support.database.metadata.TransactionCapability;
+import org.apache.shardingsphere.mcp.support.database.metadata.jdbc.RuntimeDatabaseProfile;
+
+import java.util.EnumSet;
+import java.util.Set;
+
+/**
+ * MCP database capability.
+ */
+@Getter
+public final class MCPDatabaseCapability {
+    
+    private final String databaseName;
+    
+    private final String databaseType;
+    
+    private final Set<SupportedMCPMetadataObjectType> supportedMetadataObjectTypes;
+    
+    private final Set<SupportedMCPStatement> supportedStatementClasses;
+    
+    private final TransactionCapability transactionCapability;
+    
+    private final DialectSchemaSemantics defaultSchemaSemantics;
+    
+    private final SchemaExecutionSemantics schemaExecutionSemantics;
+    
+    private final DatabaseIdentifierContext identifierContext;
+    
+    MCPDatabaseCapability(final RuntimeDatabaseProfile databaseProfile, final MCPDatabaseCapabilityOption option) {
+        databaseName = databaseProfile.getDatabase();
+        databaseType = option.getType();
+        supportedMetadataObjectTypes = createSupportedMetadataObjectTypes(option);
+        transactionCapability = databaseProfile.getTransactionCapability();
+        supportedStatementClasses = createSupportedStatementClasses(transactionCapability, option.isExplainSupported());
+        MCPDatabaseDialect databaseDialect = MCPDatabaseDialect.of(option.getType());
+        defaultSchemaSemantics = databaseDialect.getDefaultSchemaSemantics();
+        schemaExecutionSemantics = createSchemaExecutionSemantics(defaultSchemaSemantics);
+        identifierContext = databaseProfile.getIdentifierContext();
+    }
+    
+    private static SchemaExecutionSemantics createSchemaExecutionSemantics(final DialectSchemaSemantics defaultSchemaSemantics) {
+        return DialectSchemaSemantics.DATABASE_AS_SCHEMA == defaultSchemaSemantics ? SchemaExecutionSemantics.FIXED_TO_DATABASE : SchemaExecutionSemantics.BEST_EFFORT;
+    }
+    
+    private Set<SupportedMCPMetadataObjectType> createSupportedMetadataObjectTypes(final MCPDatabaseCapabilityOption option) {
+        Set<SupportedMCPMetadataObjectType> result = EnumSet.of(SupportedMCPMetadataObjectType.SCHEMA, SupportedMCPMetadataObjectType.TABLE, SupportedMCPMetadataObjectType.VIEW,
+                SupportedMCPMetadataObjectType.COLUMN, SupportedMCPMetadataObjectType.INDEX);
+        if (option.getSequenceQuery().isPresent()) {
+            result.add(SupportedMCPMetadataObjectType.SEQUENCE);
+        }
+        return result;
+    }
+    
+    private Set<SupportedMCPStatement> createSupportedStatementClasses(final TransactionCapability transactionCapability, final boolean explainSupported) {
+        Set<SupportedMCPStatement> result = EnumSet.of(SupportedMCPStatement.QUERY, SupportedMCPStatement.DML, SupportedMCPStatement.DDL, SupportedMCPStatement.DCL);
+        if (TransactionCapability.NONE != transactionCapability) {
+            result.add(SupportedMCPStatement.TRANSACTION_CONTROL);
+        }
+        if (TransactionCapability.LOCAL_WITH_SAVEPOINT == transactionCapability) {
+            result.add(SupportedMCPStatement.SAVEPOINT);
+        }
+        if (explainSupported) {
+            result.add(SupportedMCPStatement.EXPLAIN);
+        }
+        return result;
+    }
+    
+    /**
+     * Judge whether transaction control is supported.
+     *
+     * @return whether transaction control is supported
+     */
+    public boolean supportsTransactionControl() {
+        return TransactionCapability.NONE != transactionCapability;
+    }
+    
+    /**
+     * Judge whether savepoint is supported.
+     *
+     * @return whether savepoint is supported
+     */
+    public boolean supportsSavepoint() {
+        return TransactionCapability.LOCAL_WITH_SAVEPOINT == transactionCapability;
+    }
+    
+    /**
+     * Judge whether EXPLAIN query is supported.
+     *
+     * @return whether EXPLAIN query is supported
+     */
+    public boolean supportsExplain() {
+        return supportedStatementClasses.contains(SupportedMCPStatement.EXPLAIN);
+    }
+    
+    /**
+     * Judge whether cross-schema SQL is supported.
+     *
+     * @return whether cross-schema SQL is supported
+     */
+    public boolean supportsCrossSchemaSql() {
+        return SchemaExecutionSemantics.BEST_EFFORT == schemaExecutionSemantics;
+    }
+}

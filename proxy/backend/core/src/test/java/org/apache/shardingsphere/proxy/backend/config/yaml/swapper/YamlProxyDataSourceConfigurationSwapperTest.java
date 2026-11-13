@@ -1,0 +1,67 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.proxy.backend.config.yaml.swapper;
+
+import org.apache.shardingsphere.infra.datasource.pool.config.ConnectionConfiguration;
+import org.apache.shardingsphere.infra.datasource.pool.config.DataSourceConfiguration;
+import org.apache.shardingsphere.infra.datasource.pool.config.PoolConfiguration;
+import org.apache.shardingsphere.infra.util.yaml.YamlEngine;
+import org.apache.shardingsphere.proxy.backend.config.yaml.YamlProxyDataSourceConfiguration;
+import org.apache.shardingsphere.proxy.backend.config.yaml.YamlProxyDatabaseConfiguration;
+import org.junit.jupiter.api.Test;
+
+import java.io.File;
+import java.io.IOException;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class YamlProxyDataSourceConfigurationSwapperTest {
+    
+    @Test
+    void assertSwap() throws IOException {
+        YamlProxyDatabaseConfiguration yamlConfig = YamlEngine.unmarshal(
+                new File(getClass().getResource("/conf/swap/database-readwrite-splitting.yaml").getFile()), YamlProxyDatabaseConfiguration.class);
+        YamlProxyDataSourceConfiguration yamlProxyDataSourceConfig = yamlConfig.getDataSources().get("foo_db");
+        DataSourceConfiguration actualDataSourceConfig = new YamlProxyDataSourceConfigurationSwapper().swap(yamlProxyDataSourceConfig);
+        assertConnectionConfig(actualDataSourceConfig);
+        assertPoolConfig(actualDataSourceConfig);
+    }
+    
+    private void assertConnectionConfig(final DataSourceConfiguration actualDataSourceConfig) {
+        ConnectionConfiguration actualConnection = actualDataSourceConfig.getConnection();
+        assertNotNull(actualConnection);
+        assertThat(actualConnection.getDriverClassName(), is("org.h2.Driver"));
+        assertThat(actualConnection.getUrl(), is("jdbc:h2:mem:foo_db;DB_CLOSE_DELAY=-1"));
+        assertThat(actualConnection.getUsername(), is("sa"));
+        assertThat(actualConnection.getPassword(), is(""));
+    }
+    
+    private void assertPoolConfig(final DataSourceConfiguration actualDataSourceConfig) {
+        PoolConfiguration actualPool = actualDataSourceConfig.getPool();
+        assertNotNull(actualPool);
+        assertThat(actualPool.getConnectionTimeoutMilliseconds(), is(250L));
+        assertThat(actualPool.getIdleTimeoutMilliseconds(), is(30000L));
+        assertThat(actualPool.getMaxLifetimeMilliseconds(), is(600000L));
+        assertThat(actualPool.getMaxPoolSize(), is(5));
+        assertThat(actualPool.getMinPoolSize(), is(4));
+        assertTrue(actualPool.getReadOnly());
+    }
+}

@@ -1,0 +1,231 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.mode.metadata.manager.resource;
+
+import ch.qos.logback.classic.spi.ThrowableProxy;
+import lombok.SneakyThrows;
+import org.apache.shardingsphere.database.connector.core.type.DatabaseType;
+import org.apache.shardingsphere.infra.config.props.ConfigurationProperties;
+import org.apache.shardingsphere.infra.config.props.temporary.TemporaryConfigurationProperties;
+import org.apache.shardingsphere.infra.instance.ComputeNodeInstanceContext;
+import org.apache.shardingsphere.infra.metadata.ShardingSphereMetaData;
+import org.apache.shardingsphere.infra.metadata.database.ShardingSphereDatabase;
+import org.apache.shardingsphere.infra.metadata.database.resource.ResourceMetaData;
+import org.apache.shardingsphere.infra.metadata.database.resource.node.StorageNode;
+import org.apache.shardingsphere.infra.metadata.database.schema.model.ShardingSphereSchema;
+import org.apache.shardingsphere.infra.rule.ShardingSphereRule;
+import org.apache.shardingsphere.infra.spi.type.typed.TypedSPILoader;
+import org.apache.shardingsphere.mode.metadata.MetaDataContexts;
+import org.apache.shardingsphere.mode.metadata.factory.MetaDataContextsFactory;
+import org.apache.shardingsphere.mode.metadata.persist.MetaDataPersistFacade;
+import org.apache.shardingsphere.mode.metadata.persist.metadata.DatabaseMetaDataPersistFacade;
+import org.apache.shardingsphere.mode.metadata.persist.metadata.service.ViewMetaDataPersistService;
+import org.apache.shardingsphere.test.infra.fixture.jdbc.MockedDataSource;
+import org.apache.shardingsphere.test.infra.framework.extension.log.LogCaptureAssertion;
+import org.apache.shardingsphere.test.infra.framework.extension.log.LogCaptureExtension;
+import org.apache.shardingsphere.test.infra.framework.extension.log.LogCaptureSettings;
+import org.apache.shardingsphere.test.infra.framework.extension.mock.AutoMockExtension;
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.MockedConstruction;
+
+import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.TimeUnit;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.sameInstance;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
+
+@ExtendWith({AutoMockExtension.class, LogCaptureExtension.class})
+@LogCaptureSettings(suppressOutput = true)
+class StorageUnitManagerTest {
+    
+    private static final String DATABASE_NAME = "foo_db";
+    
+    @Test
+    void assertRegisterSuccess() {
+        final MetaDataContexts metaDataContexts = mockMetaDataContexts();
+        ResourceSwitchManager resourceSwitchManager = mock(ResourceSwitchManager.class);
+        SwitchingResource switchingResource = new SwitchingResource(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyList(), Collections.emptyMap());
+        when(resourceSwitchManager.switchByRegisterStorageUnit(any(ResourceMetaData.class), any(Map.class), anyBoolean())).thenReturn(switchingResource);
+        ShardingSphereDatabase reloadDatabase = mock(ShardingSphereDatabase.class);
+        ShardingSphereSchema schema = new ShardingSphereSchema("foo_schema", mock(DatabaseType.class));
+        when(reloadDatabase.getAllSchemas()).thenReturn(Collections.singleton(schema));
+        when(reloadDatabase.getProtocolType()).thenReturn(TypedSPILoader.getService(DatabaseType.class, "FIXTURE"));
+        MetaDataContexts reloadMetaDataContexts = mock(MetaDataContexts.class, RETURNS_DEEP_STUBS);
+        when(reloadMetaDataContexts.getMetaData().getDatabase(DATABASE_NAME)).thenReturn(reloadDatabase);
+        when(reloadMetaDataContexts.getMetaData().getProps()).thenReturn(new ConfigurationProperties(new Properties()));
+        try (
+                MockedConstruction<MetaDataContextsFactory> ignored = mockConstruction(MetaDataContextsFactory.class,
+                        (mock, context) -> when(mock.createBySwitchResource(DATABASE_NAME, switchingResource, metaDataContexts)).thenReturn(reloadMetaDataContexts))) {
+            createManager(metaDataContexts, resourceSwitchManager).register(DATABASE_NAME, Collections.emptyMap());
+        }
+        verify(metaDataContexts).update(any(MetaDataContexts.class));
+        verify(metaDataContexts.getMetaData()).putDatabase(any(ShardingSphereDatabase.class));
+        verifyClosableRuleInvoked(metaDataContexts);
+    }
+    
+    @Test
+    void assertRegisterLogsErrorWhenSQLException(final LogCaptureAssertion logCaptureAssertion) {
+        MetaDataContexts metaDataContexts = mockMetaDataContexts();
+        ResourceSwitchManager resourceSwitchManager = mock(ResourceSwitchManager.class);
+        SQLException expectedException = new SQLException("register error");
+        doAnswer(invocation -> {
+            throw expectedException;
+        }).when(resourceSwitchManager).switchByRegisterStorageUnit(any(ResourceMetaData.class), any(Map.class), anyBoolean());
+        assertDoesNotThrow(() -> createManager(metaDataContexts, resourceSwitchManager).register(DATABASE_NAME, Collections.emptyMap()));
+        verify(metaDataContexts, never()).update(any(MetaDataContexts.class));
+        verify(metaDataContexts.getMetaData(), never()).putDatabase(any(ShardingSphereDatabase.class));
+        logCaptureAssertion.assertErrorLog(actualException -> assertThat(((ThrowableProxy) actualException).getThrowable(), sameInstance(expectedException)));
+    }
+    
+    @Test
+    void assertRegisterClosesNewDataSourcesWhenReloadFails() {
+        MetaDataContexts metaDataContexts = mockMetaDataContexts();
+        ResourceSwitchManager resourceSwitchManager = mock(ResourceSwitchManager.class);
+        MockedDataSource newDataSource = new MockedDataSource();
+        SwitchingResource switchingResource = new SwitchingResource(Collections.singletonMap(new StorageNode("new_ds"), newDataSource),
+                Collections.emptyMap(), Collections.emptyList(), Collections.emptyMap());
+        when(resourceSwitchManager.switchByRegisterStorageUnit(any(ResourceMetaData.class), any(Map.class), anyBoolean())).thenReturn(switchingResource);
+        try (
+                MockedConstruction<MetaDataContextsFactory> ignored = mockConstruction(MetaDataContextsFactory.class,
+                        (mock, context) -> when(mock.createBySwitchResource(DATABASE_NAME, switchingResource, metaDataContexts)).thenThrow(new IllegalStateException("reload error")))) {
+            assertThrows(IllegalStateException.class, () -> createManager(metaDataContexts, resourceSwitchManager).register(DATABASE_NAME, Collections.emptyMap()));
+        }
+        Awaitility.await().pollDelay(10L, TimeUnit.MILLISECONDS).until(newDataSource::isClosed);
+        assertTrue(newDataSource.isClosed());
+        verify(metaDataContexts, never()).update(any(MetaDataContexts.class));
+    }
+    
+    @Test
+    void assertAlterSuccess() {
+        final MetaDataContexts metaDataContexts = mockMetaDataContexts();
+        ResourceSwitchManager resourceSwitchManager = mock(ResourceSwitchManager.class);
+        SwitchingResource switchingResource = new SwitchingResource(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyList(), Collections.emptyMap());
+        when(resourceSwitchManager.switchByAlterStorageUnit(any(ResourceMetaData.class), any(Map.class), anyBoolean())).thenReturn(switchingResource);
+        ShardingSphereDatabase reloadDatabase = mock(ShardingSphereDatabase.class, RETURNS_DEEP_STUBS);
+        MetaDataContexts reloadMetaDataContexts = mock(MetaDataContexts.class, RETURNS_DEEP_STUBS);
+        when(reloadMetaDataContexts.getMetaData().getDatabase(DATABASE_NAME)).thenReturn(reloadDatabase);
+        when(reloadMetaDataContexts.getMetaData().getProps()).thenReturn(new ConfigurationProperties(new Properties()));
+        ShardingSphereSchema schema = new ShardingSphereSchema("foo_schema", mock(DatabaseType.class));
+        when(reloadDatabase.getAllSchemas()).thenReturn(Collections.singleton(schema));
+        try (
+                MockedConstruction<MetaDataContextsFactory> ignored = mockConstruction(MetaDataContextsFactory.class,
+                        (mock, context) -> when(mock.createBySwitchResource(DATABASE_NAME, switchingResource, metaDataContexts)).thenReturn(reloadMetaDataContexts))) {
+            createManager(metaDataContexts, resourceSwitchManager).alter(DATABASE_NAME, Collections.emptyMap());
+        }
+        verify(metaDataContexts).update(any(MetaDataContexts.class));
+        verifyClosableRuleInvoked(metaDataContexts);
+    }
+    
+    @Test
+    void assertAlterLogsErrorWhenSQLException(final LogCaptureAssertion logCaptureAssertion) {
+        MetaDataContexts metaDataContexts = mockMetaDataContexts();
+        ResourceSwitchManager resourceSwitchManager = mock(ResourceSwitchManager.class);
+        SQLException expectedException = new SQLException("alter error");
+        doAnswer(invocation -> {
+            throw expectedException;
+        }).when(resourceSwitchManager).switchByAlterStorageUnit(any(ResourceMetaData.class), any(Map.class), anyBoolean());
+        assertDoesNotThrow(() -> createManager(metaDataContexts, resourceSwitchManager).alter(DATABASE_NAME, Collections.emptyMap()));
+        verify(metaDataContexts, never()).update(any(MetaDataContexts.class));
+        verify(metaDataContexts.getMetaData(), never()).putDatabase(any(ShardingSphereDatabase.class));
+        logCaptureAssertion.assertErrorLog(actualException -> assertThat(((ThrowableProxy) actualException).getThrowable(), sameInstance(expectedException)));
+    }
+    
+    @Test
+    void assertUnregisterSuccess() {
+        final MetaDataContexts metaDataContexts = mockMetaDataContexts();
+        ResourceSwitchManager resourceSwitchManager = mock(ResourceSwitchManager.class);
+        SwitchingResource switchingResource = new SwitchingResource(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyList(), Collections.emptyMap());
+        when(resourceSwitchManager.switchByUnregisterStorageUnit(any(ResourceMetaData.class), any(Collection.class))).thenReturn(switchingResource);
+        ShardingSphereDatabase reloadDatabase = mock(ShardingSphereDatabase.class, RETURNS_DEEP_STUBS);
+        MetaDataContexts reloadMetaDataContexts = mock(MetaDataContexts.class, RETURNS_DEEP_STUBS);
+        when(reloadMetaDataContexts.getMetaData().getDatabase(DATABASE_NAME)).thenReturn(reloadDatabase);
+        when(reloadMetaDataContexts.getMetaData().getProps()).thenReturn(new ConfigurationProperties(new Properties()));
+        ShardingSphereSchema schema = new ShardingSphereSchema("foo_schema", mock(DatabaseType.class));
+        when(reloadDatabase.getAllSchemas()).thenReturn(Collections.singleton(schema));
+        try (
+                MockedConstruction<MetaDataContextsFactory> ignored = mockConstruction(MetaDataContextsFactory.class,
+                        (mock, context) -> when(mock.createBySwitchResource(DATABASE_NAME, switchingResource, metaDataContexts)).thenReturn(reloadMetaDataContexts))) {
+            createManager(metaDataContexts, resourceSwitchManager).unregister(DATABASE_NAME, "ds_0");
+        }
+        verify(metaDataContexts).update(any(MetaDataContexts.class));
+        verifyClosableRuleInvoked(metaDataContexts);
+    }
+    
+    @Test
+    void assertUnregisterLogsErrorWhenSQLException(final LogCaptureAssertion logCaptureAssertion) {
+        MetaDataContexts metaDataContexts = mockMetaDataContexts();
+        ResourceSwitchManager resourceSwitchManager = mock(ResourceSwitchManager.class);
+        SQLException expectedException = new SQLException("unregister error");
+        doAnswer(invocation -> {
+            throw expectedException;
+        }).when(resourceSwitchManager).switchByUnregisterStorageUnit(any(ResourceMetaData.class), any(Collection.class));
+        assertDoesNotThrow(() -> createManager(metaDataContexts, resourceSwitchManager).unregister(DATABASE_NAME, "ds_0"));
+        verify(metaDataContexts, never()).update(any(MetaDataContexts.class));
+        verify(metaDataContexts.getMetaData(), never()).putDatabase(any(ShardingSphereDatabase.class));
+        logCaptureAssertion.assertErrorLog(actualException -> assertThat(((ThrowableProxy) actualException).getThrowable(), sameInstance(expectedException)));
+    }
+    
+    private MetaDataContexts mockMetaDataContexts() {
+        MetaDataContexts result = mock(MetaDataContexts.class);
+        ShardingSphereMetaData metaData = mock(ShardingSphereMetaData.class);
+        when(result.getMetaData()).thenReturn(metaData);
+        ShardingSphereDatabase database = mock(ShardingSphereDatabase.class, RETURNS_DEEP_STUBS);
+        when(database.getResourceMetaData()).thenReturn(new ResourceMetaData(Collections.emptyMap(), Collections.emptyMap()));
+        when(database.getRuleMetaData().getRules()).thenReturn(Arrays.asList(mock(ShardingSphereRule.class, withSettings().extraInterfaces(AutoCloseable.class)), mock(ShardingSphereRule.class)));
+        when(metaData.getDatabase(DATABASE_NAME)).thenReturn(database);
+        lenient().when(metaData.getTemporaryProps()).thenReturn(new TemporaryConfigurationProperties(new Properties()));
+        return result;
+    }
+    
+    private StorageUnitManager createManager(final MetaDataContexts metaDataContexts, final ResourceSwitchManager resourceSwitchManager) {
+        MetaDataPersistFacade metaDataPersistFacade = mock(MetaDataPersistFacade.class);
+        DatabaseMetaDataPersistFacade databaseMetaDataPersistFacade = mock(DatabaseMetaDataPersistFacade.class);
+        ViewMetaDataPersistService viewMetaDataPersistService = mock(ViewMetaDataPersistService.class);
+        lenient().when(metaDataPersistFacade.getDatabaseMetaDataFacade()).thenReturn(databaseMetaDataPersistFacade);
+        lenient().when(databaseMetaDataPersistFacade.getView()).thenReturn(viewMetaDataPersistService);
+        lenient().when(viewMetaDataPersistService.load(anyString(), anyString())).thenReturn(Collections.emptyList());
+        return new StorageUnitManager(metaDataContexts, mock(ComputeNodeInstanceContext.class), resourceSwitchManager, metaDataPersistFacade);
+    }
+    
+    @SneakyThrows(Exception.class)
+    private void verifyClosableRuleInvoked(final MetaDataContexts metaDataContexts) {
+        verify((AutoCloseable) metaDataContexts.getMetaData().getDatabase(DATABASE_NAME).getRuleMetaData().getRules().iterator().next()).close();
+    }
+}

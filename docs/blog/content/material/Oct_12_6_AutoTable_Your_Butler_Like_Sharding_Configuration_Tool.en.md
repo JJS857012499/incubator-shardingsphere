@@ -1,5 +1,6 @@
 +++
 title = "AutoTable: Your Butler-Like Sharding Configuration Tool"
+translationKey = "Oct_12_6_AutoTable_Your_Butler_Like_Sharding_Configuration_Tool"
 weight = 22 
 chapter = true
 +++
@@ -18,7 +19,7 @@ Following the article’s publication, we received many messages from our reader
 
 **Figure 1:** Sharding Workflow
 
-![](../../static/img/Blog_22_img_1_sharding_workflow_en.png)
+![](https://shardingsphere.apache.org/blog/img/Blog_22_img_1_sharding_workflow_en.png)
 
 In such workflow, you have to clearly know your sharding strategies, and the actual table names and their datasources. Then, you base your sharding rules on such information.
 
@@ -26,7 +27,7 @@ One of the table distribution results may be 8 sharding databases each containin
 
 **Figure 2:** 8 Databases * 4 Tables Distribution
 
-![](../../static/img/Blog_22_img_2_8_Databases_4_Tables_Distribution.png)
+![](https://shardingsphere.apache.org/blog/img/Blog_22_img_2_8_Databases_4_Tables_Distribution.png)
 
 ## Problem
 
@@ -65,7 +66,7 @@ ShardingSphere actually has very user-friendly configuration rules. However, use
 
 *We always pay attention to user issues. For example, we have noticed one of our users found the following issue:*
 
-![](../../static/img/Blog_22_img_3_Question_Comment.png)
+![](https://shardingsphere.apache.org/blog/img/Blog_22_img_3_Question_Comment.png)
 
 ## Why You Need AutoTable？
 
@@ -155,7 +156,7 @@ AutoTable aims to be your butler for sharding configuration. All you need to do 
 
 To use AutoTable, you better configure rules first and then use `CREATE TABLE` to create tables. Old habits die hard but please change your old habit: create tables first and then configure rules. Now ShardingSphere is more like an access point of your distributed database, instead of middleware.
 
-**My Datasource Names Are Non-Contiguous or I Have Too Many Datasource Names. Can I Use AutoTable?**
+**My Data Source Names Are Non-Contiguous or I Have Too Many Data Source Names. Can I Use AutoTable?**
 
 Yes, you can. When you specify your datasources, their names are not required to be continuous. To solve the problem, you can use enumeration-expression and inline-expression at the same time:
 
@@ -176,7 +177,7 @@ For more information, please read: [https://github.com/apache/shardingsphere/blo
 
 @CatYangWei was the first GitHub user to ask about `AutoTable`.
 
-![](../../static/img/Blog_22_img_4_Rewarded_User_Issue_Snapshot.png)
+![](https://shardingsphere.apache.org/blog/img/Blog_22_img_4_Rewarded_User_Issue_Snapshot.png)
 
 We’d like to thank him for helping us find the problem. We do appreciate that. In order to express our gratitude, we will contact you later and send you a gift. as a token of appreciation from the community👏👏👏
 
@@ -190,12 +191,12 @@ ShardingSphere Twitter: [https://twitter.com/ShardingSphere]()
 
 ShardingSphere Slack Channel: [apacheshardingsphere.slack.com]()
 
-Contributor Guide：[https://shardingsphere.apache.org/community/en/contribute/]()
+Contributor Guide：[https://shardingsphere.apache.org/community/en/involved/]()
 
 ## Author
 
 Longtao Jiang
 
-![](../../static/img/Blog_22_img_5_Liang_Longtao_Photo.png)
+![](https://shardingsphere.apache.org/blog/img/Blog_22_img_5_Jiang_Longtao_Photo.png)
 
 > SphereEx Middleware Development Engineer & Apache ShardingSphere Contributor.

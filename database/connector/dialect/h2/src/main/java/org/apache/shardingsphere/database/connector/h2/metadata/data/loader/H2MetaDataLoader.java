@@ -1,0 +1,221 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.database.connector.h2.metadata.data.loader;
+
+import org.apache.shardingsphere.database.connector.core.metadata.data.loader.DialectMetaDataLoader;
+import org.apache.shardingsphere.database.connector.core.metadata.data.loader.MetaDataLoaderMaterial;
+import org.apache.shardingsphere.database.connector.core.metadata.data.model.ColumnMetaData;
+import org.apache.shardingsphere.database.connector.core.metadata.data.model.IndexMetaData;
+import org.apache.shardingsphere.database.connector.core.metadata.data.model.SchemaMetaData;
+import org.apache.shardingsphere.database.connector.core.metadata.data.model.TableMetaData;
+import org.apache.shardingsphere.database.connector.core.metadata.database.datatype.DataTypeRegistry;
+import org.apache.shardingsphere.database.connector.core.metadata.database.enums.TableType;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.stream.Collectors;
+
+/**
+ * Meta data loader for H2.
+ */
+public final class H2MetaDataLoader implements DialectMetaDataLoader {
+    
+    private static final String TABLE_META_DATA_NO_ORDER = "SELECT TABLE_CATALOG, TABLE_NAME, COLUMN_NAME, DATA_TYPE, ORDINAL_POSITION, COALESCE(IS_VISIBLE, FALSE) IS_VISIBLE, IS_NULLABLE"
+            + " FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_CATALOG=? AND TABLE_SCHEMA=?";
+    
+    private static final String ORDER_BY_ORDINAL_POSITION = " ORDER BY ORDINAL_POSITION";
+    
+    private static final String TABLE_META_DATA_SQL = TABLE_META_DATA_NO_ORDER + ORDER_BY_ORDINAL_POSITION;
+    
+    private static final String TABLE_META_DATA_SQL_IN_TABLES = TABLE_META_DATA_NO_ORDER + " AND UPPER(TABLE_NAME) IN (%s)" + ORDER_BY_ORDINAL_POSITION;
+    
+    private static final String INDEX_META_DATA_SQL = "SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME, IS_UNIQUE FROM INFORMATION_SCHEMA.INDEX_COLUMNS"
+            + " WHERE TABLE_CATALOG=? AND TABLE_SCHEMA=? AND UPPER(TABLE_NAME) IN (%s) ORDER BY TABLE_NAME, INDEX_NAME, ORDINAL_POSITION";
+    
+    private static final String PRIMARY_KEY_COLUMN_META_DATA_SQL = "SELECT KCU.TABLE_NAME, KCU.COLUMN_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS TC JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE KCU"
+            + " USING (CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME) WHERE KCU.TABLE_CATALOG=? AND KCU.TABLE_SCHEMA=? AND TC.CONSTRAINT_TYPE='PRIMARY KEY'";
+    
+    private static final String PRIMARY_KEY_COLUMN_META_DATA_SQL_IN_TABLES = PRIMARY_KEY_COLUMN_META_DATA_SQL + " AND UPPER(KCU.TABLE_NAME) IN (%s)";
+    
+    private static final String GENERATED_INFO_SQL = "SELECT TABLE_NAME, COLUMN_NAME, IS_IDENTITY FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_CATALOG=? AND TABLE_SCHEMA=?";
+    
+    private static final String GENERATED_INFO_SQL_IN_TABLES = GENERATED_INFO_SQL + " AND UPPER(TABLE_NAME) IN (%s)";
+    
+    private static final String VIEW_META_DATA_SQL = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_CATALOG=? AND TABLE_SCHEMA=? AND TABLE_TYPE='VIEW' AND UPPER(TABLE_NAME) IN (%s)";
+    
+    @Override
+    public Collection<SchemaMetaData> load(final MetaDataLoaderMaterial material) throws SQLException {
+        Collection<TableMetaData> tableMetaDataList = new LinkedList<>();
+        try (Connection connection = material.getDataSource().getConnection()) {
+            Collection<String> tables = material.getActualTableNames();
+            Map<String, Collection<ColumnMetaData>> columnMetaDataMap = loadColumnMetaDataMap(
+                    connection, tables, loadTablePrimaryKeyColumns(connection, tables), loadTableGenerated(connection, tables));
+            Collection<String> viewNames = columnMetaDataMap.isEmpty() ? Collections.emptySet() : loadViewNames(connection, columnMetaDataMap.keySet());
+            Map<String, Collection<IndexMetaData>> indexMetaDataMap = columnMetaDataMap.isEmpty() ? Collections.emptyMap() : loadIndexMetaData(connection, columnMetaDataMap.keySet());
+            for (Entry<String, Collection<ColumnMetaData>> entry : columnMetaDataMap.entrySet()) {
+                Collection<IndexMetaData> indexMetaDataList = indexMetaDataMap.getOrDefault(entry.getKey(), Collections.emptyList());
+                tableMetaDataList.add(
+                        new TableMetaData(entry.getKey(), entry.getValue(), indexMetaDataList, Collections.emptyList(), viewNames.contains(entry.getKey()) ? TableType.VIEW : TableType.TABLE));
+            }
+        }
+        return Collections.singleton(new SchemaMetaData(material.getDefaultSchemaName(), tableMetaDataList));
+    }
+    
+    private Map<String, Collection<ColumnMetaData>> loadColumnMetaDataMap(final Connection connection, final Collection<String> tables,
+                                                                          final Map<String, Collection<String>> tablePrimaryKeys,
+                                                                          final Map<String, Map<String, Boolean>> tableGenerated) throws SQLException {
+        Map<String, Collection<ColumnMetaData>> result = new HashMap<>();
+        try (PreparedStatement preparedStatement = connection.prepareStatement(getTableMetaDataSQL(tables))) {
+            preparedStatement.setString(1, connection.getCatalog());
+            preparedStatement.setString(2, "PUBLIC");
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                while (resultSet.next()) {
+                    String tableName = resultSet.getString("TABLE_NAME");
+                    ColumnMetaData columnMetaData = getColumnMetaData(
+                            resultSet, tablePrimaryKeys.getOrDefault(tableName, Collections.emptyList()), tableGenerated.getOrDefault(tableName, new HashMap<>()));
+                    if (!result.containsKey(tableName)) {
+                        result.put(tableName, new LinkedList<>());
+                    }
+                    result.get(tableName).add(columnMetaData);
+                }
+            }
+        }
+        return result;
+    }
+    
+    private String getTableMetaDataSQL(final Collection<String> tables) {
+        return tables.isEmpty()
+                ? TABLE_META_DATA_SQL
+                : String.format(TABLE_META_DATA_SQL_IN_TABLES, tables.stream().map(each -> String.format("'%s'", each).toUpperCase()).collect(Collectors.joining(",")));
+    }
+    
+    private ColumnMetaData getColumnMetaData(final ResultSet resultSet, final Collection<String> primaryKeys, final Map<String, Boolean> tableGenerated) throws SQLException {
+        String columnName = resultSet.getString("COLUMN_NAME");
+        Integer dataType = DataTypeRegistry.getDataType(getDatabaseType(), resultSet.getString("DATA_TYPE")).orElse(Types.OTHER);
+        boolean primaryKey = primaryKeys.contains(columnName);
+        boolean generated = tableGenerated.getOrDefault(columnName, Boolean.FALSE);
+        boolean isVisible = resultSet.getBoolean("IS_VISIBLE");
+        boolean isNullable = "YES".equals(resultSet.getString("IS_NULLABLE"));
+        return new ColumnMetaData(columnName, dataType, primaryKey, generated, false, isVisible, false, isNullable);
+    }
+    
+    private Collection<String> loadViewNames(final Connection connection, final Collection<String> tableNames) throws SQLException {
+        Collection<String> result = new LinkedList<>();
+        try (PreparedStatement preparedStatement = connection.prepareStatement(getViewMetaDataSQL(tableNames))) {
+            preparedStatement.setString(1, connection.getCatalog());
+            preparedStatement.setString(2, "PUBLIC");
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                while (resultSet.next()) {
+                    result.add(resultSet.getString("TABLE_NAME"));
+                }
+            }
+        }
+        return result;
+    }
+    
+    private String getViewMetaDataSQL(final Collection<String> tableNames) {
+        return String.format(VIEW_META_DATA_SQL, tableNames.stream().map(each -> String.format("'%s'", each).toUpperCase()).collect(Collectors.joining(",")));
+    }
+    
+    private Map<String, Collection<IndexMetaData>> loadIndexMetaData(final Connection connection, final Collection<String> tableNames) throws SQLException {
+        Map<String, Map<String, IndexMetaData>> tableToIndex = new HashMap<>(tableNames.size(), 1F);
+        try (PreparedStatement preparedStatement = connection.prepareStatement(getIndexMetaDataSQL(tableNames))) {
+            preparedStatement.setString(1, connection.getCatalog());
+            preparedStatement.setString(2, "PUBLIC");
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                while (resultSet.next()) {
+                    String indexName = resultSet.getString("INDEX_NAME");
+                    String tableName = resultSet.getString("TABLE_NAME");
+                    Map<String, IndexMetaData> indexMap = tableToIndex.computeIfAbsent(tableName, key -> new HashMap<>());
+                    String columnName = resultSet.getString("COLUMN_NAME");
+                    if (indexMap.containsKey(indexName)) {
+                        indexMap.get(indexName).getColumns().add(columnName);
+                    } else {
+                        IndexMetaData indexMetaData = new IndexMetaData(indexName, new LinkedList<>(Collections.singleton(columnName)));
+                        indexMetaData.setUnique(resultSet.getBoolean("IS_UNIQUE"));
+                        indexMap.put(indexName, indexMetaData);
+                    }
+                }
+            }
+        }
+        return tableToIndex.entrySet().stream().collect(Collectors.toMap(Entry::getKey, entry -> entry.getValue().values()));
+    }
+    
+    private String getIndexMetaDataSQL(final Collection<String> tableNames) {
+        return String.format(INDEX_META_DATA_SQL, tableNames.stream().map(each -> String.format("'%s'", each).toUpperCase()).collect(Collectors.joining(",")));
+    }
+    
+    private String getPrimaryKeyColumnMetaDataSQL(final Collection<String> tables) {
+        return tables.isEmpty()
+                ? PRIMARY_KEY_COLUMN_META_DATA_SQL
+                : String.format(PRIMARY_KEY_COLUMN_META_DATA_SQL_IN_TABLES, tables.stream().map(each -> String.format("'%s'", each).toUpperCase()).collect(Collectors.joining(",")));
+    }
+    
+    private Map<String, Collection<String>> loadTablePrimaryKeyColumns(final Connection connection, final Collection<String> tableNames) throws SQLException {
+        Map<String, Collection<String>> result = new HashMap<>();
+        try (PreparedStatement preparedStatement = connection.prepareStatement(getPrimaryKeyColumnMetaDataSQL(tableNames))) {
+            preparedStatement.setString(1, connection.getCatalog());
+            preparedStatement.setString(2, "PUBLIC");
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                while (resultSet.next()) {
+                    String columnName = resultSet.getString("COLUMN_NAME");
+                    String tableName = resultSet.getString("TABLE_NAME");
+                    result.computeIfAbsent(tableName, key -> new LinkedList<>()).add(columnName);
+                }
+            }
+        }
+        return result;
+    }
+    
+    private String getGeneratedInfoSQL(final Collection<String> tables) {
+        return tables.isEmpty()
+                ? GENERATED_INFO_SQL
+                : String.format(GENERATED_INFO_SQL_IN_TABLES, tables.stream().map(each -> String.format("'%s'", each).toUpperCase()).collect(Collectors.joining(",")));
+    }
+    
+    private Map<String, Map<String, Boolean>> loadTableGenerated(final Connection connection, final Collection<String> tableNames) throws SQLException {
+        Map<String, Map<String, Boolean>> result = new HashMap<>();
+        try (PreparedStatement preparedStatement = connection.prepareStatement(getGeneratedInfoSQL(tableNames))) {
+            preparedStatement.setString(1, connection.getCatalog());
+            preparedStatement.setString(2, "PUBLIC");
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                while (resultSet.next()) {
+                    String columnName = resultSet.getString("COLUMN_NAME");
+                    String tableName = resultSet.getString("TABLE_NAME");
+                    boolean generated = "YES".equals(resultSet.getString("IS_IDENTITY"));
+                    result.computeIfAbsent(tableName, key -> new HashMap<>()).put(columnName, generated);
+                }
+            }
+        }
+        return result;
+    }
+    
+    @Override
+    public String getDatabaseType() {
+        return "H2";
+    }
+}

@@ -1,0 +1,195 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.mcp.core.tool;
+
+import org.apache.shardingsphere.mcp.api.MCPRequestContext;
+import org.apache.shardingsphere.mcp.api.capability.tool.MCPToolHandler;
+import org.apache.shardingsphere.mcp.api.exception.MCPUnsupportedException;
+import org.apache.shardingsphere.mcp.api.payload.MCPSuccessPayload;
+import org.apache.shardingsphere.mcp.api.session.MCPSessionIdentity;
+import org.apache.shardingsphere.mcp.core.context.MCPFeatureRuntimeRequestContext;
+import org.apache.shardingsphere.mcp.core.context.MCPRuntimeContext;
+import org.apache.shardingsphere.mcp.core.protocol.exception.MCPToolCallLimitExceededException;
+import org.apache.shardingsphere.mcp.core.protocol.exception.UnsupportedToolException;
+import org.apache.shardingsphere.mcp.core.resource.ResourceTestDataFactory;
+import org.apache.shardingsphere.mcp.core.session.MCPSessionExecutionCoordinator;
+import org.apache.shardingsphere.mcp.core.tool.handler.MCPToolDefinition;
+import org.apache.shardingsphere.mcp.core.tool.handler.ToolDefinitionRegistry;
+import org.apache.shardingsphere.mcp.support.security.MCPRuntimeProtectionPolicy;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.when;
+
+class MCPToolControllerTest {
+    
+    @Test
+    void assertHandle() {
+        MCPToolDefinition toolDefinition = ToolDefinitionRegistry.getToolDefinition("database_gateway_search_metadata");
+        MCPSuccessPayload response = mock(MCPSuccessPayload.class);
+        Map<String, Object> payload = Map.of("items", 1);
+        when(response.toPayload()).thenReturn(payload);
+        try (MockedStatic<ToolDefinitionRegistry> mocked = mockStatic(ToolDefinitionRegistry.class)) {
+            mocked.when(() -> ToolDefinitionRegistry.getToolDefinition("database_gateway_search_metadata")).thenReturn(toolDefinition);
+            mocked.when(() -> ToolDefinitionRegistry.dispatch(any(MCPFeatureRuntimeRequestContext.class), eq(toolDefinition), eq(Map.of("query", "order"))))
+                    .thenReturn(response);
+            MCPSuccessPayload actual = new MCPToolController(createRuntimeContext()).handle("session-1", "database_gateway_search_metadata", Map.of("query", "order"));
+            assertThat(toolDefinition.getDescriptor().getName(), is("database_gateway_search_metadata"));
+            assertThat(actual.toPayload(), is(payload));
+        }
+    }
+    
+    @Test
+    void assertHandleWithToolDefinition() {
+        MCPToolDefinition toolDefinition = ToolDefinitionRegistry.getToolDefinition("database_gateway_search_metadata");
+        MCPSuccessPayload response = mock(MCPSuccessPayload.class);
+        Map<String, Object> payload = Map.of("items", 1);
+        when(response.toPayload()).thenReturn(payload);
+        try (MockedStatic<ToolDefinitionRegistry> mocked = mockStatic(ToolDefinitionRegistry.class)) {
+            mocked.when(() -> ToolDefinitionRegistry.dispatch(any(MCPFeatureRuntimeRequestContext.class), eq(toolDefinition), eq(Map.of("query", "order"))))
+                    .thenReturn(response);
+            assertThat(new MCPToolController(createRuntimeContext()).handle("session-1", toolDefinition, Map.of("query", "order")).toPayload(), is(payload));
+        }
+    }
+    
+    @Test
+    void assertHandleWithUnsupportedTool() {
+        try (MockedStatic<ToolDefinitionRegistry> mocked = mockStatic(ToolDefinitionRegistry.class)) {
+            mocked.when(() -> ToolDefinitionRegistry.getToolDefinition("unsupported_tool")).thenThrow(new UnsupportedToolException("unsupported_tool"));
+            UnsupportedToolException actual =
+                    assertThrows(UnsupportedToolException.class, () -> new MCPToolController(createRuntimeContext()).handle("session-1", "unsupported_tool", Map.of()));
+            assertThat(actual.getToolName(), is("unsupported_tool"));
+            assertThat(actual.getMessage(), is("Unsupported tool `unsupported_tool`."));
+        }
+    }
+    
+    @Test
+    void assertHandleWithHandlerException() {
+        MCPToolDefinition toolDefinition = ToolDefinitionRegistry.getToolDefinition("database_gateway_search_metadata");
+        try (MockedStatic<ToolDefinitionRegistry> mocked = mockStatic(ToolDefinitionRegistry.class)) {
+            mocked.when(() -> ToolDefinitionRegistry.getToolDefinition("database_gateway_search_metadata")).thenReturn(toolDefinition);
+            mocked.when(() -> ToolDefinitionRegistry.dispatch(any(MCPFeatureRuntimeRequestContext.class), eq(toolDefinition), eq(Map.of("query", "order"))))
+                    .thenThrow(new MCPUnsupportedException("Search is not supported."));
+            MCPUnsupportedException actual = assertThrows(MCPUnsupportedException.class,
+                    () -> new MCPToolController(createRuntimeContext()).handle("session-1", "database_gateway_search_metadata", Map.of("query", "order")));
+            assertThat(toolDefinition.getDescriptor().getName(), is("database_gateway_search_metadata"));
+            assertThat(actual.getMessage(), is("Search is not supported."));
+        }
+    }
+    
+    @Test
+    void assertHandleWithToolCallLimitExceeded() {
+        MCPToolDefinition toolDefinition = ToolDefinitionRegistry.getToolDefinition("database_gateway_search_metadata");
+        MCPSuccessPayload response = mock(MCPSuccessPayload.class);
+        when(response.toPayload()).thenReturn(Map.of("items", 1));
+        try (MockedStatic<ToolDefinitionRegistry> mocked = mockStatic(ToolDefinitionRegistry.class)) {
+            mocked.when(() -> ToolDefinitionRegistry.getToolDefinition("database_gateway_search_metadata")).thenReturn(toolDefinition);
+            mocked.when(() -> ToolDefinitionRegistry.dispatch(any(MCPFeatureRuntimeRequestContext.class), eq(toolDefinition), eq(Map.of("query", "order"))))
+                    .thenReturn(response);
+            MCPToolController controller = createController(1);
+            controller.handle("session-1", "database_gateway_search_metadata", Map.of("query", "order"));
+            MCPToolCallLimitExceededException actual = assertThrows(MCPToolCallLimitExceededException.class,
+                    () -> controller.handle("session-1", "database_gateway_search_metadata", Map.of("query", "order")));
+            assertThat(toolDefinition.getDescriptor().getName(), is("database_gateway_search_metadata"));
+            assertThat(actual.getMessage(), is("MCP session exceeded the maximum tool call quota of 1."));
+            assertThat(actual.getSessionId(), is("session-1"));
+            assertThat(actual.getToolName(), is("database_gateway_search_metadata"));
+            assertThat(actual.getMaxToolCallsPerSession(), is(1));
+        }
+    }
+    
+    @Test
+    void assertCloseWaitsForToolHandler() throws InterruptedException, ExecutionException {
+        MCPRuntimeContext runtimeContext = createRuntimeContext();
+        CountDownLatch handlerStarted = new CountDownLatch(1);
+        CountDownLatch releaseHandler = new CountDownLatch(1);
+        CountDownLatch closeAttempted = new CountDownLatch(1);
+        CountDownLatch closeCompleted = new CountDownLatch(1);
+        MCPToolHandler<MCPRequestContext> handler = mock(MCPToolHandler.class);
+        when(handler.getContextType()).thenReturn(MCPRequestContext.class);
+        when(handler.handle(any(), eq(Map.of()))).thenAnswer(invocation -> {
+            handlerStarted.countDown();
+            assertTrue(releaseHandler.await(1L, TimeUnit.SECONDS));
+            return mock(MCPSuccessPayload.class);
+        });
+        MCPToolDefinition toolDefinition = new MCPToolDefinition(
+                ToolDefinitionRegistry.getToolDefinition("database_gateway_search_metadata").getDescriptor(), handler);
+        ExecutorService executorService = Executors.newFixedThreadPool(2);
+        try {
+            Future<MCPSuccessPayload> toolFuture = executorService.submit(() -> new MCPToolController(runtimeContext).handle("session-1", toolDefinition, Map.of()));
+            assertTrue(handlerStarted.await(1L, TimeUnit.SECONDS));
+            assertFalse(toolFuture.isDone());
+            Future<?> closeFuture = executorService.submit(() -> {
+                closeAttempted.countDown();
+                new MCPSessionExecutionCoordinator(runtimeContext.getSessionManager()).closeSession("session-1");
+                closeCompleted.countDown();
+            });
+            assertFalse(closeFuture.isDone());
+            assertTrue(closeAttempted.await(1L, TimeUnit.SECONDS));
+            assertFalse(closeCompleted.await(200L, TimeUnit.MILLISECONDS));
+            releaseHandler.countDown();
+            toolFuture.get();
+            closeFuture.get();
+            assertFalse(runtimeContext.getSessionManager().hasSession("session-1"));
+        } finally {
+            releaseHandler.countDown();
+            executorService.shutdownNow();
+        }
+    }
+    
+    private MCPToolController createController(final int maxToolCallsPerSession) {
+        String previous = System.getProperty(MCPRuntimeProtectionPolicy.MAX_TOOL_CALLS_PER_SESSION_PROPERTY);
+        try {
+            System.setProperty(MCPRuntimeProtectionPolicy.MAX_TOOL_CALLS_PER_SESSION_PROPERTY, String.valueOf(maxToolCallsPerSession));
+            return new MCPToolController(createRuntimeContext());
+        } finally {
+            resetMaxToolCallsPerSessionProperty(previous);
+        }
+    }
+    
+    private void resetMaxToolCallsPerSessionProperty(final String previous) {
+        if (null == previous) {
+            System.clearProperty(MCPRuntimeProtectionPolicy.MAX_TOOL_CALLS_PER_SESSION_PROPERTY);
+        } else {
+            System.setProperty(MCPRuntimeProtectionPolicy.MAX_TOOL_CALLS_PER_SESSION_PROPERTY, previous);
+        }
+    }
+    
+    private MCPRuntimeContext createRuntimeContext() {
+        MCPRuntimeContext result = ResourceTestDataFactory.createRuntimeContext();
+        result.getSessionManager().createSession(new MCPSessionIdentity("session-1", "", "", Map.of()));
+        return result;
+    }
+}

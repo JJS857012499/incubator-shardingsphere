@@ -1,0 +1,118 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.mode.metadata.refresher.util;
+
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import org.apache.shardingsphere.database.connector.core.metadata.identifier.IdentifierCasePolicyFactory;
+import org.apache.shardingsphere.database.connector.core.type.DatabaseType;
+import org.apache.shardingsphere.infra.binder.context.segment.table.TablesContext;
+import org.apache.shardingsphere.infra.binder.context.statement.SQLStatementContext;
+import org.apache.shardingsphere.infra.config.props.ConfigurationProperties;
+import org.apache.shardingsphere.infra.metadata.database.ShardingSphereDatabase;
+import org.apache.shardingsphere.infra.metadata.database.resource.ResourceMetaData;
+import org.apache.shardingsphere.infra.metadata.database.rule.RuleMetaData;
+import org.apache.shardingsphere.infra.metadata.database.schema.model.ShardingSphereSchema;
+import org.apache.shardingsphere.infra.metadata.identifier.DatabaseIdentifierContext;
+import org.apache.shardingsphere.infra.spi.type.typed.TypedSPILoader;
+import org.apache.shardingsphere.sql.parser.statement.core.statement.SQLStatement;
+import org.apache.shardingsphere.sql.parser.statement.core.statement.type.dml.DeleteStatement;
+import org.apache.shardingsphere.sql.parser.statement.core.value.identifier.IdentifierValue;
+import org.junit.jupiter.api.Test;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
+import java.util.stream.Collectors;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+class SchemaRefreshUtilsTest {
+    
+    private final DatabaseType databaseType = TypedSPILoader.getService(DatabaseType.class, "FIXTURE");
+    
+    @Test
+    void assertGetActualSchemaNameWithInsensitiveProps() {
+        assertThat(SchemaRefreshUtils.getActualSchemaName(createDatabase(), new IdentifierValue("Foo_Schema")), is("foo_schema"));
+    }
+    
+    @Test
+    void assertGetActualSchemaNames() {
+        List<IdentifierValue> schemaIdentifiers = Arrays.asList(new IdentifierValue("Foo_Schema"), new IdentifierValue("bar_schema"), new IdentifierValue("new_schema"));
+        assertThat(SchemaRefreshUtils.getActualSchemaNames(createDatabaseWithSchema("foo_schema", "bar_schema"), schemaIdentifiers),
+                is(Arrays.asList("foo_schema", "bar_schema", "new_schema")));
+    }
+    
+    @Test
+    void assertGetActualSchemaNameUsesProtocolPolicyWhenMissing() {
+        ShardingSphereDatabase database = mock(ShardingSphereDatabase.class);
+        when(database.getIdentifierContext()).thenReturn(new DatabaseIdentifierContext(IdentifierCasePolicyFactory.newUpperCasePolicySet(),
+                IdentifierCasePolicyFactory.newSensitivePolicySet(), IdentifierCasePolicyFactory.newInsensitivePolicySet(), false));
+        when(database.getAllSchemas()).thenReturn(Collections.emptyList());
+        assertThat(SchemaRefreshUtils.getActualSchemaName(database, new IdentifierValue("Foo_Schema")), is("FOO_SCHEMA"));
+    }
+    
+    @Test
+    void assertGetActualSchemaNameWithoutSchemaUsesDatabaseDefault() {
+        ShardingSphereDatabase database = mock(ShardingSphereDatabase.class);
+        when(database.getDefaultSchemaName()).thenReturn("FOO_DEFAULT_SCHEMA");
+        when(database.getIdentifierContext()).thenReturn(new DatabaseIdentifierContext(IdentifierCasePolicyFactory.newUpperCasePolicySet(),
+                IdentifierCasePolicyFactory.newSensitivePolicySet(), IdentifierCasePolicyFactory.newInsensitivePolicySet(), false));
+        when(database.getAllSchemas()).thenReturn(Collections.emptyList());
+        assertThat(SchemaRefreshUtils.getActualSchemaName(database, createSQLStatementContextWithoutSchema()), is("FOO_DEFAULT_SCHEMA"));
+    }
+    
+    private ShardingSphereDatabase createDatabase() {
+        return new ShardingSphereDatabase("FOO_DB", databaseType, new ResourceMetaData(Collections.emptyMap()), new RuleMetaData(Collections.emptyList()), Collections.emptyList(),
+                new ConfigurationProperties(new Properties()));
+    }
+    
+    private ShardingSphereDatabase createDatabaseWithSchema(final String... schemaNames) {
+        List<ShardingSphereSchema> schemas = Arrays.stream(schemaNames).map(each -> new ShardingSphereSchema(each, databaseType)).collect(Collectors.toList());
+        return new ShardingSphereDatabase("foo_db", databaseType, new ResourceMetaData(Collections.emptyMap()), new RuleMetaData(Collections.emptyList()), schemas,
+                new ConfigurationProperties(new Properties()));
+    }
+    
+    private SQLStatementContext createSQLStatementContextWithoutSchema() {
+        TablesContext tablesContext = new TablesContext(Collections.emptyList());
+        SQLStatement sqlStatement = DeleteStatement.builder().databaseType(databaseType).build();
+        return new FixtureSQLStatementContext(sqlStatement, tablesContext);
+    }
+    
+    @AllArgsConstructor(access = AccessLevel.PRIVATE)
+    private static final class FixtureSQLStatementContext implements SQLStatementContext {
+        
+        private final SQLStatement sqlStatement;
+        
+        private final TablesContext tablesContext;
+        
+        @Override
+        public SQLStatement getSqlStatement() {
+            return sqlStatement;
+        }
+        
+        @Override
+        public TablesContext getTablesContext() {
+            return tablesContext;
+        }
+    }
+}

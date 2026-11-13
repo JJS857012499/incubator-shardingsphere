@@ -1,0 +1,228 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.infra.binder.engine.segment.dml.projection;
+
+import com.cedarsoftware.util.CaseInsensitiveMap.CaseInsensitiveString;
+import com.google.common.collect.LinkedHashMultimap;
+import com.google.common.collect.Multimap;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import org.apache.shardingsphere.database.connector.core.type.DatabaseTypeRegistry;
+import org.apache.shardingsphere.infra.binder.engine.segment.SegmentType;
+import org.apache.shardingsphere.infra.binder.engine.segment.dml.expression.ExpressionSegmentBinder;
+import org.apache.shardingsphere.infra.binder.engine.segment.dml.expression.type.AggregationDistinctProjectionSegmentBinder;
+import org.apache.shardingsphere.infra.binder.engine.segment.dml.expression.type.AggregationProjectionSegmentBinder;
+import org.apache.shardingsphere.infra.binder.engine.segment.dml.expression.type.RowExpressionBinder;
+import org.apache.shardingsphere.infra.binder.engine.segment.dml.from.context.TableSegmentBinderContext;
+import org.apache.shardingsphere.infra.binder.engine.segment.dml.from.context.type.SimpleTableSegmentBinderContext;
+import org.apache.shardingsphere.infra.binder.engine.segment.dml.projection.type.ColumnProjectionSegmentBinder;
+import org.apache.shardingsphere.infra.binder.engine.segment.dml.projection.type.ShorthandProjectionSegmentBinder;
+import org.apache.shardingsphere.infra.binder.engine.segment.dml.projection.type.SubqueryProjectionSegmentBinder;
+import org.apache.shardingsphere.infra.binder.engine.segment.util.SubqueryTableBindUtils;
+import org.apache.shardingsphere.infra.binder.engine.statement.SQLStatementBinderContext;
+import org.apache.shardingsphere.infra.exception.kernel.metadata.ColumnNotFoundException;
+import org.apache.shardingsphere.sql.parser.statement.core.enums.TableSourceType;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.column.ColumnSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.ExpressionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.RowExpression;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.AggregationDistinctProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.AggregationProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.ColumnProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.ExpressionProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.ProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.ProjectionsSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.ShorthandProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.SubqueryProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.xml.XmlElementFunctionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.xml.XmlSerializeFunctionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.table.JoinTableSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.table.SimpleTableSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.table.TableSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.value.identifier.IdentifierValue;
+
+import java.util.Collection;
+
+/**
+ * Projections segment binder.
+ */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+public final class ProjectionsSegmentBinder {
+    
+    /**
+     * Bind projections segment.
+     *
+     * @param segment table segment
+     * @param binderContext statement binder context
+     * @param boundTableSegment bound table segment
+     * @param tableBinderContexts table binder contexts
+     * @param outerTableBinderContexts outer table binder contexts
+     * @return bound projections segment
+     */
+    public static ProjectionsSegment bind(final ProjectionsSegment segment, final SQLStatementBinderContext binderContext, final TableSegment boundTableSegment,
+                                          final Multimap<CaseInsensitiveString, TableSegmentBinderContext> tableBinderContexts,
+                                          final Multimap<CaseInsensitiveString, TableSegmentBinderContext> outerTableBinderContexts) {
+        ProjectionsSegment result = new ProjectionsSegment(segment.getStartIndex(), segment.getStopIndex());
+        result.setDistinctRow(segment.isDistinctRow());
+        for (ProjectionSegment each : segment.getProjections()) {
+            result.getProjections().add(bind(binderContext, boundTableSegment, result.getProjections(), tableBinderContexts, outerTableBinderContexts, each));
+        }
+        Multimap<CaseInsensitiveString, TableSegmentBinderContext> currentTableBinderContexts = createCurrentTableBinderContexts(binderContext, result.getProjections());
+        for (ExpressionSegment each : segment.getDistinctOnItems()) {
+            result.getDistinctOnItems().add(bindDistinctOnItem(each, binderContext, currentTableBinderContexts, tableBinderContexts, outerTableBinderContexts));
+        }
+        for (RowExpression each : segment.getValuesRows()) {
+            result.getValuesRows().add(RowExpressionBinder.bind(each, SegmentType.PROJECTION, binderContext, tableBinderContexts, outerTableBinderContexts));
+        }
+        return result;
+    }
+    
+    private static ProjectionSegment bind(final SQLStatementBinderContext binderContext, final TableSegment boundTableSegment, final Collection<ProjectionSegment> boundProjections,
+                                          final Multimap<CaseInsensitiveString, TableSegmentBinderContext> tableBinderContexts,
+                                          final Multimap<CaseInsensitiveString, TableSegmentBinderContext> outerTableBinderContexts, final ProjectionSegment projectionSegment) {
+        try {
+            return bind(projectionSegment, binderContext, boundTableSegment, tableBinderContexts, outerTableBinderContexts);
+        } catch (final ColumnNotFoundException ignored) {
+            if (isWholeRowProjection(projectionSegment, binderContext, boundTableSegment, tableBinderContexts)) {
+                return createWholeRowProjection((ColumnProjectionSegment) projectionSegment);
+            }
+            return bind(projectionSegment, binderContext, boundTableSegment, createCurrentTableBinderContexts(binderContext, boundProjections), outerTableBinderContexts);
+        }
+    }
+    
+    private static ProjectionSegment bind(final ProjectionSegment projectionSegment, final SQLStatementBinderContext binderContext, final TableSegment boundTableSegment,
+                                          final Multimap<CaseInsensitiveString, TableSegmentBinderContext> tableBinderContexts,
+                                          final Multimap<CaseInsensitiveString, TableSegmentBinderContext> outerTableBinderContexts) {
+        if (projectionSegment instanceof ColumnProjectionSegment) {
+            return ColumnProjectionSegmentBinder.bind((ColumnProjectionSegment) projectionSegment, binderContext, tableBinderContexts, outerTableBinderContexts);
+        }
+        if (projectionSegment instanceof ShorthandProjectionSegment) {
+            ShorthandProjectionSegment shorthand = (ShorthandProjectionSegment) projectionSegment;
+            Multimap<CaseInsensitiveString, TableSegmentBinderContext> contexts =
+                    shorthand.getOwner().isPresent() && !tableBinderContexts.containsKey(CaseInsensitiveString.of(shorthand.getOwner().get().getIdentifier().getValue()))
+                            ? outerTableBinderContexts
+                            : tableBinderContexts;
+            return ShorthandProjectionSegmentBinder.bind(shorthand, boundTableSegment, contexts);
+        }
+        if (projectionSegment instanceof SubqueryProjectionSegment) {
+            Multimap<CaseInsensitiveString, TableSegmentBinderContext> newOuterTableBinderContexts = LinkedHashMultimap.create();
+            newOuterTableBinderContexts.putAll(outerTableBinderContexts);
+            newOuterTableBinderContexts.putAll(tableBinderContexts);
+            return SubqueryProjectionSegmentBinder.bind((SubqueryProjectionSegment) projectionSegment, binderContext, newOuterTableBinderContexts);
+        }
+        if (projectionSegment instanceof ExpressionProjectionSegment) {
+            ExpressionSegment boundExpressionSegment = ExpressionSegmentBinder.bind(
+                    ((ExpressionProjectionSegment) projectionSegment).getExpr(), SegmentType.PROJECTION, binderContext, tableBinderContexts, outerTableBinderContexts);
+            ExpressionProjectionSegment result = new ExpressionProjectionSegment(
+                    projectionSegment.getStartIndex(), projectionSegment.getStopIndex(), ((ExpressionProjectionSegment) projectionSegment).getText(), boundExpressionSegment);
+            ((ExpressionProjectionSegment) projectionSegment).getAliasSegment().ifPresent(result::setAlias);
+            return result;
+        }
+        if (projectionSegment instanceof XmlElementFunctionSegment || projectionSegment instanceof XmlSerializeFunctionSegment) {
+            return (ProjectionSegment) ExpressionSegmentBinder.bind((ExpressionSegment) projectionSegment, SegmentType.PROJECTION, binderContext, tableBinderContexts, outerTableBinderContexts);
+        }
+        if (projectionSegment instanceof AggregationDistinctProjectionSegment) {
+            return bindAggregationDistinctProjection((AggregationDistinctProjectionSegment) projectionSegment, binderContext, tableBinderContexts, outerTableBinderContexts);
+        }
+        if (projectionSegment instanceof AggregationProjectionSegment) {
+            return bindAggregationProjection((AggregationProjectionSegment) projectionSegment, binderContext, tableBinderContexts, outerTableBinderContexts);
+        }
+        // TODO support more ProjectionSegment bound
+        return projectionSegment;
+    }
+    
+    private static ExpressionSegment bindDistinctOnItem(final ExpressionSegment segment, final SQLStatementBinderContext binderContext,
+                                                        final Multimap<CaseInsensitiveString, TableSegmentBinderContext> currentTableBinderContexts,
+                                                        final Multimap<CaseInsensitiveString, TableSegmentBinderContext> tableBinderContexts,
+                                                        final Multimap<CaseInsensitiveString, TableSegmentBinderContext> outerTableBinderContexts) {
+        try {
+            return ExpressionSegmentBinder.bind(segment, SegmentType.ORDER_BY, binderContext, tableBinderContexts, outerTableBinderContexts);
+        } catch (final ColumnNotFoundException ignored) {
+            return ExpressionSegmentBinder.bind(segment, SegmentType.ORDER_BY, binderContext, currentTableBinderContexts, outerTableBinderContexts);
+        }
+    }
+    
+    private static AggregationDistinctProjectionSegment bindAggregationDistinctProjection(final AggregationDistinctProjectionSegment aggregationDistinctSegment,
+                                                                                          final SQLStatementBinderContext binderContext,
+                                                                                          final Multimap<CaseInsensitiveString, TableSegmentBinderContext> tableBinderContexts,
+                                                                                          final Multimap<CaseInsensitiveString, TableSegmentBinderContext> outerTableBinderContexts) {
+        AggregationDistinctProjectionSegment result =
+                AggregationDistinctProjectionSegmentBinder.bind(aggregationDistinctSegment, SegmentType.PROJECTION, binderContext, tableBinderContexts, outerTableBinderContexts);
+        aggregationDistinctSegment.getAliasSegment().ifPresent(result::setAlias);
+        return result;
+    }
+    
+    private static AggregationProjectionSegment bindAggregationProjection(final AggregationProjectionSegment aggregationSegment, final SQLStatementBinderContext binderContext,
+                                                                          final Multimap<CaseInsensitiveString, TableSegmentBinderContext> tableBinderContexts,
+                                                                          final Multimap<CaseInsensitiveString, TableSegmentBinderContext> outerTableBinderContexts) {
+        AggregationProjectionSegment result = AggregationProjectionSegmentBinder.bind(
+                aggregationSegment, SegmentType.PROJECTION, binderContext, tableBinderContexts, outerTableBinderContexts);
+        aggregationSegment.getAliasSegment().ifPresent(result::setAlias);
+        return result;
+    }
+    
+    private static boolean isWholeRowProjection(final ProjectionSegment projectionSegment, final SQLStatementBinderContext binderContext,
+                                                final TableSegment boundTableSegment,
+                                                final Multimap<CaseInsensitiveString, TableSegmentBinderContext> tableBinderContexts) {
+        if (!(projectionSegment instanceof ColumnProjectionSegment) || !isSupportWholeRowProjection(binderContext)) {
+            return false;
+        }
+        ColumnSegment columnSegment = ((ColumnProjectionSegment) projectionSegment).getColumn();
+        if (columnSegment.getOwner().isPresent() || null != columnSegment.getNestedObjectAttributes() && !columnSegment.getNestedObjectAttributes().isEmpty()) {
+            return false;
+        }
+        String columnName = columnSegment.getIdentifier().getValue();
+        return isTableAliasOrName(boundTableSegment, columnName) || tableBinderContexts.containsKey(CaseInsensitiveString.of(columnName));
+    }
+    
+    private static boolean isSupportWholeRowProjection(final SQLStatementBinderContext binderContext) {
+        return new DatabaseTypeRegistry(binderContext.getSqlStatement().getDatabaseType()).getDialectDatabaseMetaData().getSQLOption().isSupportWholeRowProjection();
+    }
+    
+    private static ExpressionProjectionSegment createWholeRowProjection(final ColumnProjectionSegment projectionSegment) {
+        ColumnSegment columnSegment = projectionSegment.getColumn();
+        ExpressionProjectionSegment result = new ExpressionProjectionSegment(columnSegment.getStartIndex(), columnSegment.getStopIndex(), columnSegment.getExpression());
+        projectionSegment.getAliasSegment().ifPresent(result::setAlias);
+        return result;
+    }
+    
+    private static boolean isTableAliasOrName(final TableSegment tableSegment, final String identifier) {
+        if (null == tableSegment) {
+            return false;
+        }
+        if (tableSegment.getAliasName().isPresent()) {
+            return tableSegment.getAliasName().get().equalsIgnoreCase(identifier);
+        }
+        if (tableSegment instanceof SimpleTableSegment) {
+            return ((SimpleTableSegment) tableSegment).getTableName().getIdentifier().getValue().equalsIgnoreCase(identifier);
+        }
+        if (tableSegment instanceof JoinTableSegment) {
+            JoinTableSegment joinTableSegment = (JoinTableSegment) tableSegment;
+            return isTableAliasOrName(joinTableSegment.getLeft(), identifier) || isTableAliasOrName(joinTableSegment.getRight(), identifier);
+        }
+        return false;
+    }
+    
+    private static Multimap<CaseInsensitiveString, TableSegmentBinderContext> createCurrentTableBinderContexts(final SQLStatementBinderContext binderContext,
+                                                                                                               final Collection<ProjectionSegment> projections) {
+        Multimap<CaseInsensitiveString, TableSegmentBinderContext> result = LinkedHashMultimap.create();
+        Collection<ProjectionSegment> subqueryProjections = SubqueryTableBindUtils.createSubqueryProjections(
+                projections, new IdentifierValue(""), binderContext.getSqlStatement().getDatabaseType(), TableSourceType.TEMPORARY_TABLE);
+        result.put(CaseInsensitiveString.of(""), new SimpleTableSegmentBinderContext(subqueryProjections, TableSourceType.TEMPORARY_TABLE));
+        return result;
+    }
+}

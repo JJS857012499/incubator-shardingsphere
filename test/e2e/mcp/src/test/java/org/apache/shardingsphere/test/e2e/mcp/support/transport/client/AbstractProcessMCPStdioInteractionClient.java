@@ -1,0 +1,318 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.test.e2e.mcp.support.transport.client;
+
+import org.apache.shardingsphere.infra.util.json.JsonEngine;
+import org.apache.shardingsphere.infra.util.json.JsonException;
+import org.apache.shardingsphere.infra.util.json.JsonTypeReference;
+import org.apache.shardingsphere.test.e2e.mcp.support.artifact.MCPArtifactUtils;
+import org.apache.shardingsphere.test.e2e.mcp.support.transport.MCPInteractionPayloads;
+import org.apache.shardingsphere.test.e2e.mcp.support.transport.MCPInteractionProtocolSupport;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+/**
+ * STDIO MCP interaction client backed by one child process.
+ */
+abstract class AbstractProcessMCPStdioInteractionClient extends AbstractMCPInteractionClient {
+    
+    private static final long PROCESS_STOP_TIMEOUT_SECONDS = 5L;
+    
+    private static final long RESPONSE_TIMEOUT_SECONDS = 30L;
+    
+    private static final int STDERR_DIAGNOSTIC_MAX_CHARS = 4096;
+    
+    private static final String INITIALIZE_REQUEST_ID = "init-1";
+    
+    private final List<String> stdErrorMessages = new CopyOnWriteArrayList<>();
+    
+    private Process process;
+    
+    private Thread stdErrorCollector;
+    
+    private BufferedWriter writer;
+    
+    private BufferedReader reader;
+    
+    @Override
+    public final void open() throws IOException, InterruptedException {
+        if (null != process) {
+            return;
+        }
+        try {
+            process = createProcessBuilder().start();
+            stdErrorCollector = startStdErrorCollector(process, stdErrorMessages);
+            writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8));
+            reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
+            initializeSession();
+        } catch (final IOException | InterruptedException | IllegalStateException ex) {
+            closeQuietly();
+            throw ex;
+        }
+    }
+    
+    @Override
+    public final void close() throws IOException {
+        if (null == process) {
+            return;
+        }
+        try {
+            writer.close();
+            waitForNormalExit();
+        } catch (final InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IOException("STDIO MCP process was interrupted during shutdown.", ex);
+        } finally {
+            closeQuietly();
+        }
+    }
+    
+    protected abstract ProcessBuilder createProcessBuilder() throws IOException;
+    
+    protected abstract String getClientName();
+    
+    @Override
+    protected final void ensureOpened() {
+        if (null == process) {
+            throw new IllegalStateException("MCP session is not initialized.");
+        }
+    }
+    
+    @Override
+    protected final Map<String, Object> sendRequest(final String requestId, final String method,
+                                                    final Map<String, Object> params) throws IOException, InterruptedException {
+        writeJsonRpcMessage(MCPInteractionProtocolSupport.createJsonRpcRequest(requestId, method, params));
+        return readResponse(requestId);
+    }
+    
+    private void initializeSession() throws IOException, InterruptedException {
+        Map<String, Object> initializePayload = sendRequest(INITIALIZE_REQUEST_ID, "initialize",
+                MCPInteractionProtocolSupport.createInitializeRequestParams(getClientName()));
+        if (MCPInteractionPayloads.hasJsonRpcError(initializePayload)) {
+            throw createRuntimeFailureException("Failed to initialize STDIO MCP session: "
+                    + MCPInteractionPayloads.getJsonRpcErrorPayload(initializePayload).get("message")
+                    + ".");
+        }
+        Map<String, Object> initializeResult = MCPInteractionPayloads.getRequiredJsonRpcResult(initializePayload);
+        if (!MCPInteractionProtocolSupport.PROTOCOL_VERSION.equals(initializeResult.get("protocolVersion"))) {
+            throw createRuntimeFailureException("Unexpected STDIO MCP protocol version: " + initializeResult + ".");
+        }
+        sendNotification("notifications/initialized", Map.of());
+    }
+    
+    private Thread startStdErrorCollector(final Process process, final List<String> stdErrorMessages) {
+        Thread result = new Thread(() -> collectStdError(process, stdErrorMessages), getClientName() + "-stderr");
+        result.setDaemon(true);
+        result.start();
+        return result;
+    }
+    
+    private void collectStdError(final Process process, final List<String> stdErrorMessages) {
+        try (BufferedReader actualReader = new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while (null != (line = actualReader.readLine())) {
+                stdErrorMessages.add(line);
+            }
+        } catch (final IOException ignored) {
+        }
+    }
+    
+    @Override
+    protected final void sendNotification(final String method, final Map<String, Object> params) throws IOException {
+        writeJsonRpcMessage(MCPInteractionProtocolSupport.createJsonRpcNotification(method, params));
+    }
+    
+    private void writeJsonRpcMessage(final Map<String, Object> payload) throws IOException {
+        try {
+            writer.write(JsonEngine.marshal(payload));
+        } catch (final JsonException ex) {
+            throw new IOException(ex.getMessage(), ex);
+        }
+        writer.newLine();
+        writer.flush();
+    }
+    
+    private Map<String, Object> readResponse(final String requestId) throws IOException, InterruptedException {
+        long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(RESPONSE_TIMEOUT_SECONDS);
+        String line;
+        while (null != (line = readLine(requestId, deadlineNanos))) {
+            if (line.isBlank()) {
+                continue;
+            }
+            Map<String, Object> result;
+            try {
+                result = JsonEngine.unmarshal(line, new JsonTypeReference<Map<String, Object>>() {
+                });
+            } catch (final JsonException ex) {
+                throw new IOException(ex.getMessage(), ex);
+            }
+            if (requestId.equals(String.valueOf(result.get("id")))) {
+                return result;
+            }
+        }
+        throw createRuntimeFailureException("STDIO MCP runtime did not return a response.");
+    }
+    
+    private String readLine(final String requestId, final long deadlineNanos) throws IOException, InterruptedException {
+        long remainingNanos = deadlineNanos - System.nanoTime();
+        if (0L >= remainingNanos) {
+            throw createResponseTimeoutException(requestId);
+        }
+        ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+        Future<String> responseLine = executor.submit(reader::readLine);
+        try {
+            return responseLine.get(remainingNanos, TimeUnit.NANOSECONDS);
+        } catch (final TimeoutException ex) {
+            responseLine.cancel(true);
+            throw createResponseTimeoutException(requestId);
+        } catch (final ExecutionException ex) {
+            if (ex.getCause() instanceof IOException) {
+                throw (IOException) ex.getCause();
+            }
+            throw new IOException("Failed to read STDIO MCP response.", ex.getCause());
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+    
+    private IllegalStateException createResponseTimeoutException(final String requestId) throws InterruptedException {
+        destroyProcess();
+        return createRuntimeFailureException(String.format(
+                "STDIO MCP runtime did not return response `%s` within %d seconds.", requestId, RESPONSE_TIMEOUT_SECONDS));
+    }
+    
+    private void waitForNormalExit() throws InterruptedException {
+        if (!process.waitFor(PROCESS_STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+            destroyProcess();
+            throw createRuntimeFailureException("STDIO MCP process did not exit after stdin closed.");
+        }
+        if (0 != process.exitValue()) {
+            throw createRuntimeFailureException("STDIO MCP process exited with code " + process.exitValue() + ".");
+        }
+    }
+    
+    private void destroyProcess() throws InterruptedException {
+        if (!process.isAlive()) {
+            return;
+        }
+        process.destroy();
+        if (process.waitFor(PROCESS_STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+            return;
+        }
+        process.destroyForcibly();
+        process.waitFor(PROCESS_STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+    }
+    
+    private String getStdErrorOutput() {
+        if (stdErrorMessages.isEmpty()) {
+            return "<empty>";
+        }
+        String result = String.join(System.lineSeparator(), stdErrorMessages);
+        return result.length() <= STDERR_DIAGNOSTIC_MAX_CHARS ? result : result.substring(0, STDERR_DIAGNOSTIC_MAX_CHARS) + "...<truncated>";
+    }
+    
+    private IllegalStateException createRuntimeFailureException(final String defaultMessage) {
+        return new IllegalStateException(createRuntimeFailureMessage(defaultMessage));
+    }
+    
+    private String createRuntimeFailureMessage(final String defaultMessage) {
+        String actualMessage = getProcessFailureMessage();
+        return (null == actualMessage ? defaultMessage : defaultMessage + " Process failure: " + appendSentenceTerminator(actualMessage)) + " stderr: " + getStdErrorOutput();
+    }
+    
+    private String appendSentenceTerminator(final String value) {
+        return value.endsWith(".") ? value : value + ".";
+    }
+    
+    private String getProcessFailureMessage() {
+        return stdErrorMessages.stream().filter(each -> each.startsWith("Exception in thread "))
+                .map(this::extractFailureMessage).findFirst().orElse(null);
+    }
+    
+    private String extractFailureMessage(final String errorLine) {
+        int separatorIndex = errorLine.lastIndexOf(": ");
+        return -1 == separatorIndex ? errorLine : errorLine.substring(separatorIndex + 2);
+    }
+    
+    private void closeQuietly() {
+        closeReaderQuietly();
+        closeWriterQuietly();
+        destroyProcessQuietly();
+        if (null != stdErrorCollector) {
+            try {
+                stdErrorCollector.join(TimeUnit.SECONDS.toMillis(PROCESS_STOP_TIMEOUT_SECONDS));
+            } catch (final InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        process = null;
+        reader = null;
+        writer = null;
+        stdErrorCollector = null;
+        MCPArtifactUtils.writeRuntimeLogIfConfigured(getClientName() + "-", stdErrorMessages);
+        stdErrorMessages.clear();
+    }
+    
+    private void closeReaderQuietly() {
+        try {
+            if (null != reader) {
+                reader.close();
+            }
+        } catch (final IOException ignored) {
+        }
+    }
+    
+    private void closeWriterQuietly() {
+        try {
+            if (null != writer) {
+                writer.close();
+            }
+        } catch (final IOException ignored) {
+        }
+    }
+    
+    private void destroyProcessQuietly() {
+        if (null == process || !process.isAlive()) {
+            return;
+        }
+        process.destroy();
+        try {
+            if (process.waitFor(PROCESS_STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                return;
+            }
+            process.destroyForcibly();
+            process.waitFor(PROCESS_STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (final InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}

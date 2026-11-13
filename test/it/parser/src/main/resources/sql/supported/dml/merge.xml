@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Licensed to the Apache Software Foundation (ASF) under one or more
+  ~ contributor license agreements.  See the NOTICE file distributed with
+  ~ this work for additional information regarding copyright ownership.
+  ~ The ASF licenses this file to You under the Apache License, Version 2.0
+  ~ (the "License"); you may not use this file except in compliance with
+  ~ the License.  You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<sql-cases>
+    <sql-case id="merge_with_error_logging" value="MERGE INTO t_user target USING t_user_source source ON (target.user_id = source.user_id) WHEN MATCHED THEN UPDATE SET target.email = source.email LOG ERRORS INTO ERR$_T_USER (?) REJECT LIMIT UNLIMITED" db-types="Oracle" case-types="PLACEHOLDER" />
+    <sql-case id="merge_update_with_scalar_subquery" value="MERGE INTO t_user target USING (SELECT ? user_id FROM DUAL) source ON (target.user_id = source.user_id) WHEN MATCHED THEN UPDATE SET target.email = (SELECT MAX(u.email) FROM t_user u WHERE u.user_id &lt; ?)" db-types="Oracle" case-types="PLACEHOLDER" />
+    <sql-case id="merge_insert_with_scalar_subquery" value="MERGE INTO t_user target USING (SELECT ? user_id FROM DUAL) source ON (target.user_id = source.user_id) WHEN NOT MATCHED THEN INSERT (user_id, email) VALUES (source.user_id, (SELECT MAX(u.email) FROM t_user u WHERE u.user_id &lt; ?))" db-types="Oracle" case-types="PLACEHOLDER" />
+    <sql-case id="merge_with_system_datetime_functions" value="MERGE INTO t_user target USING (SELECT ? user_id FROM DUAL) source ON (target.user_id = source.user_id) WHEN MATCHED THEN UPDATE SET target.creation_date = SYSDATE WHEN NOT MATCHED THEN INSERT (user_id, creation_date) VALUES (source.user_id, CAST(SYSTIMESTAMP AS TIMESTAMP))" db-types="Oracle" case-types="PLACEHOLDER" />
+    <sql-case id="merge_with_quoted_system_datetime_column" value="MERGE INTO t_user target USING (SELECT ? user_id FROM DUAL) source ON (target.user_id = source.user_id) WHEN MATCHED THEN UPDATE SET target.creation_date = &quot;SYSDATE&quot;" db-types="Oracle" case-types="PLACEHOLDER" />
+    <sql-case id="merge_into_table_using_table" value="MERGE INTO people_target USING people_source ON (people_target.person_id = people_source.person_id)" db-types="Oracle" />
+    <sql-case id="merge_into_table_using_subquery_alias" value="MERGE INTO bonuses D USING (SELECT employee_id, salary, department_id FROM employees WHERE department_id = 80) S ON (D.employee_id = S.employee_id)" db-types="Oracle" />
+    <sql-case id="merge_update_table" value="MERGE INTO people_target pt USING people_source ps ON (pt.person_id = ps.person_id) WHEN MATCHED THEN UPDATE SET pt.first_name = ps.first_name, pt.last_name = ps.last_name, pt.title = ps.title" db-types="Oracle" />
+    <sql-case id="merge_update_table_with_delete" value="MERGE INTO bonuses D USING (SELECT employee_id, salary, department_id FROM employees WHERE department_id = 80) S ON (D.employee_id = S.employee_id) WHEN MATCHED THEN UPDATE SET D.bonus = D.bonus + S.salary*.01 DELETE WHERE (S.salary > 8000)" db-types="Oracle" />
+    <sql-case id="merge_update_and_insert_table" value="MERGE INTO bonuses D    USING (SELECT employee_id, salary, department_id FROM hr.employees    WHERE department_id = 80) S    ON (D.employee_id = S.employee_id)    WHEN MATCHED THEN UPDATE SET D.bonus = D.bonus + S.salary*.01      DELETE WHERE (S.salary = 8000)    WHEN NOT MATCHED THEN INSERT (D.employee_id, D.bonus)      VALUES (S.employee_id, S.salary*.01)      WHERE (S.salary &lt;= 8000);"  db-types="Oracle" />
+    <sql-case id="merge_insert_and_update_table" value="MERGE INTO t_order t1
+                                                        USING (SELECT ? AS userId, ? AS orderId
+                                                               FROM DUAL) t2
+                                                        ON (t1.user_id = t2.userId AND t1.order_id = t2.orderId)
+                                                        WHEN NOT MATCHED THEN
+                                                            INSERT (order_id, user_id, status, merchant_id, remark, creation_date)
+                                                            VALUES (?, ?, ?, ?, ?, DATE '2017-08-08')
+                                                        WHEN MATCHED THEN
+                                                            UPDATE
+                                                            SET merchant_id = ?,
+                                                                remark      = ?,
+                                                                status      = ?;"  db-types="Oracle" case-types="PLACEHOLDER" />
+    <sql-case id="merge_insert_then_update" value="MERGE INTO bonuses D USING employees S ON (D.id = S.id) WHEN NOT MATCHED THEN INSERT (id) VALUES (S.id) WHEN MATCHED THEN UPDATE SET D.id = S.id" db-types="Oracle" />
+    <sql-case id="merge_into_select" value="MERGE INTO (SELECT * FROM bonuses WHERE department_id = 80) D USING (SELECT employee_id, salary, department_id FROM employees WHERE department_id = 80) S ON (D.employee_id = S.employee_id) WHEN MATCHED THEN UPDATE SET D.bonus = D.bonus + S.salary*.01 DELETE WHERE (S.salary > 8000)" db-types="Oracle" />
+    <sql-case id="merge_output_with_aaterisk" value="MERGE INTO people_target pt USING people_source ps ON (pt.person_id = ps.person_id) WHEN MATCHED THEN UPDATE SET first_name = ps.first_name, pt.last_name = ps.last_name, pt.title = ps.title OUTPUT deleted.*, $action, inserted.*" db-types="SQLServer" />
+    <sql-case id="merge_update" value="MERGE INTO employees AS T USING employee_updates AS S ON T.id = S.id WHEN MATCHED THEN UPDATE SET T.salary = S.new_salary;" db-types="Hive" />
+    <sql-case id="merge_delete" value="MERGE INTO orders AS t USING invalid_orders AS s ON t.order_id = s.order_id WHEN MATCHED THEN DELETE;" db-types="Hive" />
+    <sql-case id="merge_insert" value="MERGE INTO employees AS T USING employee_updates AS S ON T.id = S.id WHEN NOT MATCHED THEN INSERT VALUES (S.id,S.new_salary);" db-types="Hive" />
+    <sql-case id="merge_delete_source_expression" value="MERGE INTO orders AS t USING (SELECT order_id FROM invalid_orders) AS s ON t.order_id = s.order_id WHEN MATCHED THEN DELETE;" db-types="Hive" />
+    <sql-case id="merge_conditional" value="MERGE INTO employees AS T USING employee_updates AS S ON T.id = S.id WHEN MATCHED AND S.is_active = true THEN UPDATE SET T.salary = S.new_salary WHEN MATCHED AND S.is_active = false THEN DELETE WHEN NOT MATCHED AND S.new_salary &lt; 5000 THEN INSERT VALUES (S.id);" db-types="Hive" />
+    <sql-case id="merge_pg_when_matched_then_update" value="MERGE INTO t_merge_target t USING t_merge_source s ON t.order_id = s.order_id WHEN MATCHED THEN UPDATE SET status = s.status" db-types="PostgreSQL" />
+    <sql-case id="merge_pg_when_matched_then_delete" value="MERGE INTO t_merge_target USING t_merge_source ON t_merge_target.order_id = t_merge_source.order_id WHEN MATCHED THEN DELETE" db-types="PostgreSQL" />
+    <sql-case id="merge_pg_when_matched_do_nothing" value="MERGE INTO t_merge_target USING t_merge_source ON t_merge_target.order_id = t_merge_source.order_id WHEN MATCHED THEN DO NOTHING" db-types="PostgreSQL" />
+    <sql-case id="merge_pg_when_not_matched_then_insert" value="MERGE INTO t_merge_target USING t_merge_source ON t_merge_target.order_id = t_merge_source.order_id WHEN NOT MATCHED THEN INSERT (order_id, status) VALUES (1, 2)" db-types="PostgreSQL" />
+    <sql-case id="merge_pg_with_condition_and_multiple_whens" value="MERGE INTO t_merge_target USING t_merge_source ON t_merge_target.order_id = t_merge_source.order_id WHEN MATCHED AND t_merge_target.status = t_merge_source.status THEN UPDATE SET status = t_merge_source.status WHEN NOT MATCHED THEN DO NOTHING" db-types="PostgreSQL" />
+    <sql-case id="merge_pg_with_returning" value="MERGE INTO t_merge_target USING t_merge_source ON t_merge_target.order_id = t_merge_source.order_id WHEN MATCHED THEN UPDATE SET status = t_merge_source.status RETURNING t_merge_target.order_id" db-types="PostgreSQL" />
+    <sql-case id="merge_pg_using_subquery" value="MERGE INTO t_merge_target USING (SELECT order_id FROM t_merge_source) AS src ON t_merge_target.order_id = src.order_id WHEN MATCHED THEN DELETE" db-types="PostgreSQL" />
+
+    <sql-case id="merge_by_source_parameters_postgresql_regression" value="MERGE INTO foo USING bar ON foo.id = ? WHEN NOT MATCHED BY SOURCE AND foo.id &gt; ? THEN UPDATE SET id = ?" db-types="PostgreSQL" case-types="Placeholder" />
+    <sql-case id="merge_by_target_parameters_postgresql_regression" value="MERGE INTO foo USING bar ON foo.id = ? WHEN NOT MATCHED BY TARGET THEN INSERT (id) VALUES (?)" db-types="PostgreSQL" case-types="Placeholder" />
+    <sql-case id="merge_not_matched_source_delete_pg" value="MERGE INTO t USING s ON t.id = s.id WHEN NOT MATCHED BY SOURCE THEN DELETE" db-types="PostgreSQL" />
+    <sql-case id="merge_not_matched_source_update_pg" value="MERGE INTO t USING s ON t.id = s.id WHEN NOT MATCHED BY SOURCE AND t.id &gt; 0 THEN UPDATE SET v = 1" db-types="PostgreSQL" />
+    <sql-case id="merge_not_matched_source_nothing_pg" value="MERGE INTO t USING s ON t.id = s.id WHEN NOT MATCHED BY SOURCE THEN DO NOTHING" db-types="PostgreSQL" />
+    <sql-case id="merge_not_matched_target_insert_pg" value="MERGE INTO t USING s ON t.id = s.id WHEN NOT MATCHED BY TARGET THEN INSERT (id) VALUES (s.id)" db-types="PostgreSQL" />
+    <sql-case id="merge_not_matched_target_nothing_pg" value="MERGE INTO t USING s ON t.id = s.id WHEN NOT MATCHED BY TARGET THEN DO NOTHING" db-types="PostgreSQL" />
+    <sql-case id="merge_mixed_match_modes_pg" value="MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET v = 1 WHEN NOT MATCHED BY SOURCE THEN DELETE WHEN NOT MATCHED BY TARGET THEN INSERT (id) VALUES (s.id)" db-types="PostgreSQL" />
+    <sql-case id="merge_not_matched_insert_control_pg" value="MERGE INTO t USING s ON t.id = s.id WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id)" db-types="PostgreSQL" />
+    <sql-case id="merge_source_target_identifiers_pg" value="MERGE INTO target USING source ON target.id = source.id WHEN NOT MATCHED BY SOURCE THEN DELETE" db-types="PostgreSQL" />
+</sql-cases>

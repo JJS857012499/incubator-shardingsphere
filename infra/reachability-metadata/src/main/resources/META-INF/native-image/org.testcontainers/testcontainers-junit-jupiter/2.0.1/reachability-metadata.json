@@ -1,0 +1,30 @@
+{
+  "reflection": [
+    {
+      "condition": {
+        "typeReached": "org.testcontainers.shaded.org.awaitility.core.LambdaErrorMessageGenerator"
+      },
+      "type": {
+        "lambda": {
+          "declaringClass": "org.testcontainers.containers.GenericContainer",
+          "interfaces": [
+            "java.util.concurrent.Callable"
+          ]
+        }
+      }
+    },
+    {
+      "condition": {
+        "typeReached": "org.testcontainers.shaded.org.awaitility.core.LambdaErrorMessageGenerator"
+      },
+      "type": {
+        "lambda": {
+          "declaringClass": "org.testcontainers.images.RemoteDockerImage",
+          "interfaces": [
+            "java.util.concurrent.Callable"
+          ]
+        }
+      }
+    }
+  ]
+}

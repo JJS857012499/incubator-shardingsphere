@@ -1,0 +1,300 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.mcp.feature.encrypt.tool.service;
+
+import org.apache.shardingsphere.database.connector.core.metadata.identifier.IdentifierScope;
+import org.apache.shardingsphere.mcp.feature.encrypt.EncryptFeatureDefinition;
+import org.apache.shardingsphere.mcp.feature.encrypt.tool.model.EncryptWorkflowRequest;
+import org.apache.shardingsphere.mcp.support.database.spi.MCPFeatureQueryFacade;
+import org.apache.shardingsphere.mcp.support.workflow.model.AlgorithmPropertyRequirement;
+import org.apache.shardingsphere.mcp.support.workflow.model.ClarifiedIntent;
+import org.apache.shardingsphere.mcp.support.workflow.model.InteractionPlan;
+import org.apache.shardingsphere.mcp.support.workflow.model.RuleWorkflowFeatureData;
+import org.apache.shardingsphere.mcp.support.workflow.model.SecretReferenceValue;
+import org.apache.shardingsphere.mcp.support.workflow.model.WorkflowContextSnapshot;
+import org.apache.shardingsphere.mcp.support.workflow.model.WorkflowIssueCode;
+import org.junit.jupiter.api.Test;
+import org.mockito.AdditionalAnswers;
+import org.mockito.MockedConstruction;
+
+import java.util.List;
+import java.util.Map;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
+
+class EncryptWorkflowValidationServiceTest {
+    
+    @Test
+    void assertValidateHappyPath() {
+        WorkflowContextSnapshot snapshot = createSnapshot("plan-1", "session-1", "executed", "create");
+        EncryptRuleInspectionService ruleInspectionService = mock(EncryptRuleInspectionService.class);
+        when(ruleInspectionService.queryEncryptRules(any(), any(), any())).thenReturn(List.of(createRuleRow()));
+        MCPFeatureQueryFacade queryFacade = createQueryFacade();
+        Map<String, Object> actual = createService(ruleInspectionService).validate(snapshot, queryFacade).toMap();
+        assertThat(actual.get("overall_status"), is("passed"));
+        assertThat(getValidationSection(actual, "rule").get("status"), is("passed"));
+        assertFalse(actual.containsKey("ddl_validation"));
+        assertTrue(getValidationSection(actual, "logical_metadata").isEmpty());
+        assertTrue(getValidationSection(actual, "sql_executability").isEmpty());
+    }
+    
+    @Test
+    void assertValidateUsesColumnIdentifierPolicy() {
+        WorkflowContextSnapshot snapshot = createSnapshot("plan-1", "session-1", "executed", "create");
+        EncryptRuleInspectionService ruleInspectionService = mock(EncryptRuleInspectionService.class);
+        when(ruleInspectionService.queryEncryptRules(any(), any(), any())).thenReturn(List.of(Map.of(
+                "logic_column", "phone",
+                "cipher_column", "PHONE_CIPHER",
+                "encryptor_type", "AES")));
+        MCPFeatureQueryFacade queryFacade = createQueryFacade();
+        when(queryFacade.isSameIdentifier("logic_db", IdentifierScope.COLUMN, "phone_cipher", "PHONE_CIPHER")).thenReturn(true);
+        Map<String, Object> actual = createService(ruleInspectionService).validate(snapshot, queryFacade).toMap();
+        assertThat(actual.get("overall_status"), is("passed"));
+    }
+    
+    @Test
+    void assertValidateDropWorkflowAfterRuleRemoval() {
+        WorkflowContextSnapshot snapshot = createSnapshot("plan-1", "session-1", "executed", "drop");
+        EncryptRuleInspectionService ruleInspectionService = mock(EncryptRuleInspectionService.class);
+        when(ruleInspectionService.queryEncryptRules(any(), any(), any())).thenReturn(List.of());
+        Map<String, Object> actual = validate(createService(ruleInspectionService), snapshot);
+        assertThat(actual.get("overall_status"), is("passed"));
+        assertThat(getValidationSection(actual, "rule").get("status"), is("passed"));
+    }
+    
+    @Test
+    void assertValidateWhenRuleMissing() {
+        WorkflowContextSnapshot snapshot = createSnapshot("plan-1", "session-1", "executed", "create");
+        EncryptRuleInspectionService ruleInspectionService = mock(EncryptRuleInspectionService.class);
+        when(ruleInspectionService.queryEncryptRules(any(), any(), any())).thenReturn(List.of());
+        Map<String, Object> actual = validate(createService(ruleInspectionService), snapshot);
+        assertThat(actual.get("overall_status"), is("failed"));
+        assertThat(((Map<?, ?>) ((List<?>) actual.get("mismatches")).getFirst()).get("code"), is(WorkflowIssueCode.RULE_STATE_MISMATCH));
+    }
+    
+    @Test
+    void assertValidateWhenRuleMappingMismatch() {
+        WorkflowContextSnapshot snapshot = createSnapshot("plan-1", "session-1", "executed", "create");
+        EncryptRuleInspectionService ruleInspectionService = mock(EncryptRuleInspectionService.class);
+        when(ruleInspectionService.queryEncryptRules(any(), any(), any())).thenReturn(List.of(Map.of(
+                "logic_column", "phone",
+                "cipher_column", "phone_cipher_old",
+                "encryptor_type", "AES")));
+        Map<String, Object> actual = validate(createService(ruleInspectionService), snapshot);
+        assertThat(actual.get("overall_status"), is("failed"));
+        assertThat(getValidationSection(actual, "rule").get("status"), is("failed"));
+        assertThat(((Map<?, ?>) ((List<?>) actual.get("mismatches")).getFirst()).get("expected"), is("cipher_column=phone_cipher"));
+    }
+    
+    @Test
+    void assertValidateExpectedStateMasksSecretPropertyMismatch() {
+        WorkflowContextSnapshot snapshot = createSnapshot("plan-1", "session-1", "executed", "create");
+        snapshot.getPropertyRequirements().add(new AlgorithmPropertyRequirement("primary", "aes-key-value", true, true, "key", ""));
+        snapshot.setFeatureData(new RuleWorkflowFeatureData(List.of(Map.of(
+                "logic_column", "phone",
+                "cipher_column", "phone_cipher",
+                "encryptor_type", "AES",
+                "encryptor_props", Map.of("aes-key-value", "123456")))));
+        EncryptRuleInspectionService ruleInspectionService = mock(EncryptRuleInspectionService.class);
+        when(ruleInspectionService.queryEncryptRules(any(), any(), any())).thenReturn(List.of(Map.of(
+                "logic_column", "phone",
+                "cipher_column", "phone_cipher",
+                "encryptor_type", "AES",
+                "encryptor_props", Map.of("aes-key-value", "old-key"))));
+        Map<String, Object> actual = validate(createService(ruleInspectionService), snapshot);
+        assertThat(actual.get("overall_status"), is("failed"));
+        assertFalse(String.valueOf(actual.get("mismatches")).contains("123456"));
+        assertFalse(String.valueOf(actual.get("mismatches")).contains("old-key"));
+        assertThat(((Map<?, ?>) ((List<?>) actual.get("mismatches")).getFirst()).get("expected"), is("encryptor_props={aes-key-value=******}"));
+    }
+    
+    @Test
+    void assertValidateExpectedStateAcceptsResolvedReferencedProperty() {
+        WorkflowContextSnapshot snapshot = createSnapshot("plan-1", "session-1", "executed", "create");
+        snapshot.getRequest().getPrimaryAlgorithmProperties().put("aes-key-value", "secret_reference:primary.aes-key-value");
+        snapshot.getRequest().getPrimaryAlgorithmSecretReferences().put("aes-key-value", SecretReferenceValue.create());
+        snapshot.setFeatureData(new RuleWorkflowFeatureData(List.of(Map.of(
+                "logic_column", "phone",
+                "cipher_column", "phone_cipher",
+                "encryptor_type", "AES",
+                "encryptor_props", Map.of("aes-key-value", "secret_reference:primary.aes-key-value")))));
+        EncryptRuleInspectionService ruleInspectionService = mock(EncryptRuleInspectionService.class);
+        when(ruleInspectionService.queryEncryptRules(any(), any(), any())).thenReturn(List.of(Map.of(
+                "logic_column", "phone",
+                "cipher_column", "phone_cipher",
+                "encryptor_type", "AES",
+                "encryptor_props", Map.of("aes-key-value", "raw-actual-secret"))));
+        Map<String, Object> actual = validate(createService(ruleInspectionService), snapshot);
+        assertThat(actual.get("overall_status"), is("passed"));
+        assertThat(((List<?>) actual.get("mismatches")).size(), is(0));
+        assertFalse(String.valueOf(actual).contains("raw-actual-secret"));
+        assertFalse(String.valueOf(actual).contains("placeholder://secret-value-1"));
+    }
+    
+    @Test
+    void assertValidateExpectedStateDetectsUnresolvedReferencedProperty() {
+        WorkflowContextSnapshot snapshot = createSnapshot("plan-1", "session-1", "executed", "create");
+        snapshot.getRequest().getPrimaryAlgorithmProperties().put("aes-key-value", "secret_reference:primary.aes-key-value");
+        snapshot.getRequest().getPrimaryAlgorithmSecretReferences().put("aes-key-value", SecretReferenceValue.create());
+        snapshot.setFeatureData(new RuleWorkflowFeatureData(List.of(Map.of(
+                "logic_column", "phone",
+                "cipher_column", "phone_cipher",
+                "encryptor_type", "AES",
+                "encryptor_props", Map.of("aes-key-value", "secret_reference:primary.aes-key-value")))));
+        EncryptRuleInspectionService ruleInspectionService = mock(EncryptRuleInspectionService.class);
+        when(ruleInspectionService.queryEncryptRules(any(), any(), any())).thenReturn(List.of(Map.of(
+                "logic_column", "phone",
+                "cipher_column", "phone_cipher",
+                "encryptor_type", "AES",
+                "encryptor_props", Map.of("aes-key-value", "secret_reference:primary.aes-key-value"))));
+        Map<String, Object> actual = validate(createService(ruleInspectionService), snapshot);
+        assertThat(actual.get("overall_status"), is("failed"));
+        assertThat(((Map<?, ?>) ((List<?>) actual.get("mismatches")).getFirst()).get("expected"), is("encryptor_props={aes-key-value=******}"));
+        assertThat(((Map<?, ?>) ((List<?>) actual.get("mismatches")).getFirst()).get("actual"), is("encryptor_props={aes-key-value=******}"));
+        assertFalse(String.valueOf(actual).contains("placeholder://secret-value-1"));
+    }
+    
+    @Test
+    void assertValidateExpectedStateDetectsMissingNonTargetRule() {
+        WorkflowContextSnapshot snapshot = createSnapshot("plan-1", "session-1", "executed", "create");
+        snapshot.setFeatureData(new RuleWorkflowFeatureData(List.of(
+                createRuleRow(),
+                Map.of("logic_column", "email", "cipher_column", "email_cipher", "encryptor_type", "AES"))));
+        EncryptRuleInspectionService ruleInspectionService = mock(EncryptRuleInspectionService.class);
+        when(ruleInspectionService.queryEncryptRules(any(), any(), any())).thenReturn(List.of(createRuleRow()));
+        Map<String, Object> actual = validate(createService(ruleInspectionService), snapshot);
+        assertThat(actual.get("overall_status"), is("failed"));
+        assertThat(((Map<?, ?>) ((List<?>) actual.get("mismatches")).getFirst()).get("expected"), is("logic_column=email"));
+    }
+    
+    @Test
+    void assertValidateExpectedStateDetectsUnexpectedExtraRule() {
+        WorkflowContextSnapshot snapshot = createSnapshot("plan-1", "session-1", "executed", "create");
+        snapshot.setFeatureData(new RuleWorkflowFeatureData(List.of(createRuleRow())));
+        EncryptRuleInspectionService ruleInspectionService = mock(EncryptRuleInspectionService.class);
+        when(ruleInspectionService.queryEncryptRules(any(), any(), any())).thenReturn(List.of(
+                createRuleRow(),
+                Map.of("logic_column", "email", "cipher_column", "email_cipher", "encryptor_type", "AES")));
+        Map<String, Object> actual = validate(createService(ruleInspectionService), snapshot);
+        assertThat(actual.get("overall_status"), is("failed"));
+        assertThat(((Map<?, ?>) ((List<?>) actual.get("mismatches")).getFirst()).get("actual"), is("logic_column=email"));
+    }
+    
+    @Test
+    void assertValidateDropWithRemainingRule() {
+        WorkflowContextSnapshot snapshot = createSnapshot("plan-1", "session-1", "executed", "drop");
+        EncryptRuleInspectionService inspectionService = mock(EncryptRuleInspectionService.class);
+        when(inspectionService.queryEncryptRules(any(), any(), any())).thenReturn(List.of(createRuleRow()));
+        Map<String, Object> actual = createService(inspectionService).validate(snapshot, createQueryFacade()).toMap();
+        assertThat(actual.get("overall_status"), is("failed"));
+        assertThat(getValidationSection(actual, "rule").get("details"), is("Encrypt rule still exists."));
+        assertThat(((Map<?, ?>) ((List<?>) actual.get("mismatches")).getFirst()).get("code"), is(WorkflowIssueCode.RULE_STATE_MISMATCH));
+    }
+    
+    @Test
+    void assertValidateQueryAlgorithmMismatch() {
+        WorkflowContextSnapshot snapshot = createSnapshot("plan-1", "session-1", "executed", "create");
+        EncryptWorkflowRequest request = (EncryptWorkflowRequest) snapshot.getRequest();
+        request.getOptions().setRequiresEqualityFilter(true);
+        request.getOptions().setAssistedQueryColumnName("phone_assisted");
+        request.getOptions().setAssistedQueryAlgorithmType("MD5");
+        request.getOptions().setRequiresLikeQuery(true);
+        request.getOptions().setLikeQueryColumnName("phone_like");
+        request.getOptions().setLikeQueryAlgorithmType("CHAR_DIGEST_LIKE");
+        EncryptRuleInspectionService inspectionService = mock(EncryptRuleInspectionService.class);
+        when(inspectionService.queryEncryptRules(any(), any(), any())).thenReturn(List.of(Map.of(
+                "logic_column", "phone", "cipher_column", "phone_cipher", "encryptor_type", "AES", "assisted_query_column", "phone_assisted",
+                "assisted_query_type", "SM3", "like_query_column", "phone_like", "like_query_type", "CHAR_DIGEST_LIKE")));
+        MCPFeatureQueryFacade queryFacade = createQueryFacade();
+        when(queryFacade.isSameIdentifier("logic_db", IdentifierScope.COLUMN, "phone_assisted", "phone_assisted")).thenReturn(true);
+        when(queryFacade.isSameIdentifier("logic_db", IdentifierScope.COLUMN, "phone_like", "phone_like")).thenReturn(true);
+        Map<String, Object> actual = createService(inspectionService).validate(snapshot, queryFacade).toMap();
+        assertThat(actual.get("overall_status"), is("failed"));
+        assertThat(((Map<?, ?>) ((List<?>) actual.get("mismatches")).getFirst()).get("expected"), is("assisted_query_type=MD5"));
+    }
+    
+    private MCPFeatureQueryFacade createQueryFacade() {
+        MCPFeatureQueryFacade result = mock(MCPFeatureQueryFacade.class);
+        when(result.isSameIdentifier("logic_db", IdentifierScope.COLUMN, "phone", "phone")).thenReturn(true);
+        when(result.isSameIdentifier("logic_db", IdentifierScope.COLUMN, "phone_cipher", "phone_cipher")).thenReturn(true);
+        when(result.isSameIdentifier("logic_db", IdentifierScope.COLUMN, "email", "email")).thenReturn(true);
+        when(result.isSameIdentifier("logic_db", IdentifierScope.COLUMN, "email_cipher", "email_cipher")).thenReturn(true);
+        when(result.isSameIdentifier("logic_db", IdentifierScope.COLUMN, "", "")).thenReturn(true);
+        return result;
+    }
+    
+    private Map<String, Object> validate(final EncryptWorkflowValidationService service, final WorkflowContextSnapshot snapshot) {
+        return service.validate(snapshot, createQueryFacade()).toMap();
+    }
+    
+    private EncryptWorkflowValidationService createService(final EncryptRuleInspectionService ruleInspectionService) {
+        try (
+                MockedConstruction<EncryptRuleInspectionService> ignored = mockConstruction(
+                        EncryptRuleInspectionService.class, withSettings().defaultAnswer(AdditionalAnswers.delegatesTo(ruleInspectionService)))) {
+            return new EncryptWorkflowValidationService();
+        }
+    }
+    
+    private WorkflowContextSnapshot createSnapshot(final String planId, final String sessionId, final String status, final String operationType) {
+        WorkflowContextSnapshot result = new WorkflowContextSnapshot();
+        result.setPlanId(planId);
+        result.setSessionId(sessionId);
+        result.setStatus(status);
+        result.setWorkflowKind(EncryptFeatureDefinition.WORKFLOW_KIND);
+        InteractionPlan interactionPlan = new InteractionPlan();
+        interactionPlan.setCurrentStep("executed");
+        result.setInteractionPlan(interactionPlan);
+        result.setRequest(createRequest());
+        ClarifiedIntent clarifiedIntent = new ClarifiedIntent();
+        clarifiedIntent.setOperationType(operationType);
+        result.setClarifiedIntent(clarifiedIntent);
+        return result;
+    }
+    
+    private EncryptWorkflowRequest createRequest() {
+        EncryptWorkflowRequest result = new EncryptWorkflowRequest();
+        result.setDatabase("logic_db");
+        result.setSchema("public");
+        result.setTable("orders");
+        result.setColumn("phone");
+        result.setAlgorithmType("AES");
+        result.getOptions().setCipherColumnName("phone_cipher");
+        result.getOptions().setRequiresEqualityFilter(false);
+        result.getOptions().setRequiresLikeQuery(false);
+        return result;
+    }
+    
+    private Map<String, Object> createRuleRow() {
+        return Map.of(
+                "logic_column", "phone",
+                "cipher_column", "phone_cipher",
+                "encryptor_type", "AES");
+    }
+    
+    private Map<?, ?> getValidationSection(final Map<String, Object> payload, final String layer) {
+        return ((List<?>) payload.get("sections")).stream().map(each -> (Map<?, ?>) each).filter(each -> layer.equals(each.get("layer"))).findFirst().orElse(Map.of());
+    }
+}

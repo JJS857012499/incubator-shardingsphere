@@ -1,0 +1,61 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.sharding.rewrite.token.pojo;
+
+import org.apache.shardingsphere.infra.rewrite.sql.token.common.pojo.Attachable;
+import org.apache.shardingsphere.infra.rewrite.sql.token.common.pojo.RouteUnitAware;
+import org.apache.shardingsphere.infra.rewrite.sql.token.common.pojo.SQLToken;
+import org.apache.shardingsphere.infra.route.context.RouteUnit;
+
+import java.util.Collection;
+import java.util.Map;
+
+/**
+ * Order by token.
+ */
+public final class OrderByToken extends SQLToken implements Attachable, RouteUnitAware {
+    
+    private final Collection<String> orderByItems;
+    
+    private final Map<RouteUnit, Collection<String>> routeUnitOrderByItems;
+    
+    public OrderByToken(final int startIndex, final Collection<String> orderByItems, final Map<RouteUnit, Collection<String>> routeUnitOrderByItems) {
+        super(startIndex);
+        this.orderByItems = orderByItems;
+        this.routeUnitOrderByItems = routeUnitOrderByItems;
+    }
+    
+    @Override
+    public int getStopIndex() {
+        return getStartIndex();
+    }
+    
+    @Override
+    public String toString(final RouteUnit routeUnit) {
+        return toString(routeUnitOrderByItems.get(routeUnit));
+    }
+    
+    @Override
+    public String toString() {
+        return toString(orderByItems);
+    }
+    
+    private String toString(final Collection<String> items) {
+        return " ORDER BY " + String.join(",", items) + " ";
+    }
+}

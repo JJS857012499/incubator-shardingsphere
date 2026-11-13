@@ -1,11 +1,12 @@
 +++
 title = "E-Hualu X ShardingSphere | Hulu Story’s Data Processing Shortcut"
+translationKey = "Oct_12_5_E_Hualu_ShardingSphere_Hulu_Story_Data_Processing_Shortcut"
 weight = 21 
 chapter = true
 +++
 
 > “ShardingSphere has greatly simplified sharding development and maintenance, which has played a very important role in our rapid product release. We estimate that ShardingSphere has saved us at least 4 months of R&D costs.”                                                
-*— Shi Moxuan, Technical Director，E-Hualu*
+*— Shi Moxuan, Technical Director, E-Hualu*
 
 At the beginning of this year, E-hualu officially launched its cloud service product “Hulu App” that targets non-business users. Since then, its architecture’s data stress has increased on a daily basis.
 
@@ -68,5 +69,7 @@ Hulu App is the first to-customer product of E-hualu.
 **ShardingSphere Community:**
 
 ShardingSphere Github: [https://github.com/apache/shardingsphere]()
+
 ShardingSphere Twitter: [https://twitter.com/ShardingSphere]()
+
 ShardingSphere Slack Channel: [apacheshardingsphere.slack.com]()

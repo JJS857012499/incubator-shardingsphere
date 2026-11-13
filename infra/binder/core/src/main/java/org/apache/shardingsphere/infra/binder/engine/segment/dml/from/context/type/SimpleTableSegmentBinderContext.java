@@ -1,0 +1,103 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.infra.binder.engine.segment.dml.from.context.type;
+
+import com.cedarsoftware.util.CaseInsensitiveMap;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+import org.apache.shardingsphere.infra.binder.engine.segment.dml.from.context.TableSegmentBinderContext;
+import org.apache.shardingsphere.sql.parser.statement.core.enums.TableSourceType;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.ProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.ShorthandProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.OwnerSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.value.identifier.IdentifierValue;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Optional;
+
+/**
+ * Simple table segment binder context.
+ */
+@RequiredArgsConstructor
+@Getter
+@Setter
+public final class SimpleTableSegmentBinderContext implements TableSegmentBinderContext {
+    
+    @Getter(AccessLevel.NONE)
+    private final Map<String, ProjectionSegment> columnLabelProjectionSegments;
+    
+    @Getter(AccessLevel.NONE)
+    private final Collection<ProjectionSegment> orderedProjectionSegments = new ArrayList<>();
+    
+    private final TableSourceType tableSourceType;
+    
+    private IdentifierValue originalTableName;
+    
+    private OwnerSegment originalOwner;
+    
+    private boolean fromWithSegment;
+    
+    private boolean containsDBLink;
+    
+    private boolean skipColumnBind;
+    
+    public SimpleTableSegmentBinderContext(final Collection<ProjectionSegment> projectionSegments, final TableSourceType tableSourceType) {
+        columnLabelProjectionSegments = new CaseInsensitiveMap<>(projectionSegments.size(), 1F);
+        projectionSegments.forEach(each -> putColumnLabelProjectionSegments(each, columnLabelProjectionSegments));
+        this.tableSourceType = tableSourceType;
+    }
+    
+    public SimpleTableSegmentBinderContext(final Collection<ProjectionSegment> projectionSegments, final TableSourceType tableSourceType, final IdentifierValue originalTableName) {
+        this(projectionSegments, tableSourceType);
+        this.originalTableName = originalTableName;
+    }
+    
+    private void putColumnLabelProjectionSegments(final ProjectionSegment projectionSegment, final Map<String, ProjectionSegment> columnLabelProjectionSegments) {
+        if (projectionSegment instanceof ShorthandProjectionSegment) {
+            orderedProjectionSegments.addAll(((ShorthandProjectionSegment) projectionSegment).getActualProjectionSegments());
+            ((ShorthandProjectionSegment) projectionSegment).getActualProjectionSegments().forEach(each -> columnLabelProjectionSegments.put(each.getColumnLabel(), each));
+        } else {
+            orderedProjectionSegments.add(projectionSegment);
+            columnLabelProjectionSegments.put(projectionSegment.getColumnLabel(), projectionSegment);
+        }
+    }
+    
+    @Override
+    public Optional<ProjectionSegment> findProjectionSegmentByColumnLabel(final String columnLabel) {
+        return Optional.ofNullable(columnLabelProjectionSegments.get(columnLabel));
+    }
+    
+    @Override
+    public Collection<ProjectionSegment> getProjectionSegments() {
+        return orderedProjectionSegments.isEmpty() ? columnLabelProjectionSegments.values() : orderedProjectionSegments;
+    }
+    
+    @Override
+    public Optional<IdentifierValue> getOriginalTableName() {
+        return Optional.ofNullable(originalTableName);
+    }
+    
+    @Override
+    public Optional<OwnerSegment> getOriginalOwner() {
+        return Optional.ofNullable(originalOwner);
+    }
+}

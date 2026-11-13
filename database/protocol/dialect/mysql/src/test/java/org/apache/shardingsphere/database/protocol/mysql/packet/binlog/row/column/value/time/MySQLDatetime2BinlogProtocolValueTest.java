@@ -1,0 +1,177 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.database.protocol.mysql.packet.binlog.row.column.value.time;
+
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import org.apache.shardingsphere.database.protocol.mysql.constant.MySQLBinaryColumnType;
+import org.apache.shardingsphere.database.protocol.mysql.packet.binlog.row.column.MySQLBinlogColumnDef;
+import org.apache.shardingsphere.database.protocol.mysql.payload.MySQLPacketPayload;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.stubbing.OngoingStubbing;
+
+import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.util.Locale;
+import java.util.stream.Stream;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class MySQLDatetime2BinlogProtocolValueTest {
+    
+    @Mock
+    private MySQLPacketPayload payload;
+    
+    @Mock
+    private ByteBuf byteBuf;
+    
+    private MySQLBinlogColumnDef columnDef;
+    
+    private MySQLDatetime2BinlogProtocolValue protocolValue;
+    
+    @BeforeEach
+    void setUp() {
+        columnDef = new MySQLBinlogColumnDef(MySQLBinaryColumnType.DATETIME2);
+        protocolValue = new MySQLDatetime2BinlogProtocolValue();
+    }
+    
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("readCases")
+    void assertReadWithDatetime(final String name, final int columnMeta, final int[] readInt1Values, final Integer unsignedShortValue, final Integer unsignedMediumValue,
+                                final LocalDateTime expectedDateTime) {
+        columnDef.setColumnMeta(columnMeta);
+        stubReadInt1(readInt1Values);
+        if (null != unsignedShortValue || null != unsignedMediumValue) {
+            when(payload.getByteBuf()).thenReturn(byteBuf);
+        }
+        if (null != unsignedShortValue) {
+            when(byteBuf.readUnsignedShort()).thenReturn(unsignedShortValue);
+        }
+        if (null != unsignedMediumValue) {
+            when(byteBuf.readUnsignedMedium()).thenReturn(unsignedMediumValue);
+        }
+        assertThat(protocolValue.read(columnDef, payload), is(Timestamp.valueOf(expectedDateTime)));
+    }
+    
+    private void stubReadInt1(final int[] readInt1Values) {
+        OngoingStubbing<Integer> stubbing = when(payload.readInt1()).thenReturn(readInt1Values[0]);
+        for (int i = 1; i < readInt1Values.length; i++) {
+            stubbing = stubbing.thenReturn(readInt1Values[i]);
+        }
+    }
+    
+    @Test
+    void assertReadWithZeroMonth() {
+        when(payload.readInt1()).thenReturn(0x99, 0xae, 0xde, 0xa0, 0x00);
+        assertThat(protocolValue.read(columnDef, payload), is("2023-00-15 10:00:00"));
+    }
+    
+    @Test
+    void assertReadWithZeroDay() {
+        when(payload.readInt1()).thenReturn(0x99, 0xb0, 0x00, 0xa0, 0x00);
+        assertThat(protocolValue.read(columnDef, payload), is("2023-05-00 10:00:00"));
+    }
+    
+    @Test
+    void assertReadWithZeroMonthAndOneByteFraction() {
+        assertThat(readFully(2, 0x99, 0xae, 0xde, 0xa0, 0x00, 0x2d), is("2023-00-15 10:00:00.450000"));
+    }
+    
+    private Object readFully(final int fractionalSecondsPrecision, final int... bytes) {
+        ByteBuf buffer = Unpooled.buffer(bytes.length);
+        for (int each : bytes) {
+            buffer.writeByte(each);
+        }
+        columnDef.setColumnMeta(fractionalSecondsPrecision);
+        Object result = protocolValue.read(columnDef, new MySQLPacketPayload(buffer, StandardCharsets.UTF_8));
+        assertThat(buffer.readableBytes(), is(0));
+        return result;
+    }
+    
+    @Test
+    void assertReadWithZeroDayAndTwoByteFraction() {
+        assertThat(readFully(4, 0x99, 0xb0, 0x00, 0xa0, 0x00, 0x04, 0xd2), is("2023-05-00 10:00:00.123400"));
+    }
+    
+    @Test
+    void assertReadWithZeroMonthAndThreeByteFraction() {
+        assertThat(readFully(6, 0x99, 0xae, 0xde, 0xa0, 0x00, 0x01, 0xe2, 0x40), is("2023-00-15 10:00:00.123456"));
+    }
+    
+    @Test
+    void assertReadWithZeroMonthUnderNonLatinDefaultFormatLocale() {
+        Locale originalLocale = Locale.getDefault(Locale.Category.FORMAT);
+        Locale.setDefault(Locale.Category.FORMAT, Locale.forLanguageTag("th-TH-u-nu-thai"));
+        try {
+            assertThat(readFully(6, 0x99, 0xae, 0xde, 0xa0, 0x00, 0x01, 0xe2, 0x40), is("2023-00-15 10:00:00.123456"));
+        } finally {
+            Locale.setDefault(Locale.Category.FORMAT, originalLocale);
+        }
+    }
+    
+    @Test
+    void assertReadWithZeroDatetime() {
+        assertThat(protocolValue.read(columnDef, payload), is(MySQLTimeValueUtils.DATETIME_OF_ZERO));
+    }
+    
+    @Test
+    void assertReadWithZeroDatetimeAndFraction() {
+        columnDef.setColumnMeta(4);
+        when(payload.getByteBuf()).thenReturn(byteBuf);
+        when(payload.readInt1()).thenReturn(0x00, 0x00, 0x00, 0x00, 0x00);
+        when(byteBuf.readUnsignedShort()).thenReturn(0);
+        assertThat(protocolValue.read(columnDef, payload), is(MySQLTimeValueUtils.DATETIME_OF_ZERO));
+        verify(byteBuf).readUnsignedShort();
+    }
+    
+    @Test
+    void assertReadWithSignedZeroDatetime() {
+        when(payload.readInt1()).thenReturn(0x80, 0x00, 0x00, 0x00, 0x00);
+        assertThat(protocolValue.read(columnDef, payload), is(MySQLTimeValueUtils.DATETIME_OF_ZERO));
+    }
+    
+    @Test
+    void assertReadWithSignedZeroDatetimeAndFraction() {
+        columnDef.setColumnMeta(4);
+        when(payload.getByteBuf()).thenReturn(byteBuf);
+        when(payload.readInt1()).thenReturn(0x80, 0x00, 0x00, 0x00, 0x00);
+        when(byteBuf.readUnsignedShort()).thenReturn(0);
+        assertThat(protocolValue.read(columnDef, payload), is(MySQLTimeValueUtils.DATETIME_OF_ZERO));
+        verify(byteBuf).readUnsignedShort();
+    }
+    
+    private static Stream<Arguments> readCases() {
+        return Stream.of(
+                Arguments.of("no_fraction", 0, new int[]{0xfe, 0xf3, 0xff, 0x7e, 0xfb}, null, null, LocalDateTime.of(9999, 12, 31, 23, 59, 59)),
+                Arguments.of("one_byte_zero", 1, new int[]{0xfe, 0xf3, 0xff, 0x7e, 0xfb, 0x00}, null, null, LocalDateTime.of(9999, 12, 31, 23, 59, 59)),
+                Arguments.of("two_bytes_999ms", 3, new int[]{0xfe, 0xf3, 0xff, 0x7e, 0xfb}, 9990, null, LocalDateTime.of(9999, 12, 31, 23, 59, 59, 999_000_000)),
+                Arguments.of("three_bytes_999990us", 5, new int[]{0xfe, 0xf3, 0xff, 0x7e, 0xfb}, null, 999990, LocalDateTime.of(9999, 12, 31, 23, 59, 59, 999_990_000)));
+    }
+}

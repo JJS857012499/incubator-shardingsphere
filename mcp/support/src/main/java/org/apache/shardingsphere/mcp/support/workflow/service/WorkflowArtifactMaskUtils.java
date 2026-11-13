@@ -1,0 +1,194 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.mcp.support.workflow.service;
+
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import org.apache.shardingsphere.mcp.support.workflow.model.AlgorithmPropertyRequirement;
+import org.apache.shardingsphere.mcp.support.workflow.model.RuleArtifact;
+import org.apache.shardingsphere.mcp.support.workflow.model.SecretReferenceValue;
+import org.apache.shardingsphere.mcp.support.workflow.model.WorkflowFieldNames;
+import org.apache.shardingsphere.mcp.support.workflow.model.WorkflowRequest;
+
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
+/**
+ * Workflow artifact masking utilities.
+ */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+public final class WorkflowArtifactMaskUtils {
+    
+    private static final String MASKED_VALUE = "******";
+    
+    /**
+     * Create masked rule artifact map.
+     *
+     * @param ruleArtifact rule artifact
+     * @param request workflow request
+     * @param propertyRequirements property requirements
+     * @return masked rule artifact map
+     */
+    public static Map<String, Object> createMaskedRuleArtifactMap(final RuleArtifact ruleArtifact, final WorkflowRequest request,
+                                                                  final List<AlgorithmPropertyRequirement> propertyRequirements) {
+        Map<String, Object> result = new LinkedHashMap<>(4, 1F);
+        result.put(WorkflowFieldNames.OPERATION_TYPE, ruleArtifact.getOperationType());
+        result.put("sql", maskSensitiveSql(ruleArtifact.getSql(), request, propertyRequirements));
+        result.put("redaction", createRedactionPayload(request, propertyRequirements));
+        return result;
+    }
+    
+    /**
+     * Mask sensitive values inside SQL text.
+     *
+     * @param sql SQL text
+     * @param request workflow request
+     * @param propertyRequirements property requirements
+     * @return masked SQL text
+     */
+    public static String maskSensitiveSql(final String sql, final WorkflowRequest request, final List<AlgorithmPropertyRequirement> propertyRequirements) {
+        String result = WorkflowSecretReferenceUtils.replacePlaceholdersWithManualPlaceholders(sql, request);
+        for (String each : collectSecretValues(request, propertyRequirements)) {
+            if (each.isEmpty()) {
+                continue;
+            }
+            result = result.replace(each, MASKED_VALUE);
+            result = result.replace(WorkflowSQLUtils.escapeLiteral(each), MASKED_VALUE);
+        }
+        return result;
+    }
+    
+    /**
+     * Mask sensitive property values.
+     *
+     * @param properties property values
+     * @param propertyRequirements property requirements
+     * @return masked property values
+     */
+    public static Map<String, String> maskPropertyMap(final Map<String, String> properties, final List<AlgorithmPropertyRequirement> propertyRequirements) {
+        return maskPropertyMap(properties, propertyRequirements, Set.of());
+    }
+    
+    /**
+     * Mask sensitive property values.
+     *
+     * @param properties property values
+     * @param propertyRequirements property requirements
+     * @param request workflow request
+     * @param algorithmRole algorithm role
+     * @return masked property values
+     */
+    public static Map<String, String> maskPropertyMap(final Map<String, String> properties, final List<AlgorithmPropertyRequirement> propertyRequirements,
+                                                      final WorkflowRequest request, final String algorithmRole) {
+        return maskPropertyMap(properties, propertyRequirements, null == request ? Set.of() : request.getSecretReferences(algorithmRole).keySet());
+    }
+    
+    private static Map<String, String> maskPropertyMap(final Map<String, String> properties, final List<AlgorithmPropertyRequirement> propertyRequirements,
+                                                       final Set<String> secretReferencePropertyKeys) {
+        Map<String, String> result = new LinkedHashMap<>(properties.size(), 1F);
+        properties.forEach((key, value) -> result.put(key, isSecretProperty(propertyRequirements, key) || secretReferencePropertyKeys.contains(key)
+                || SecretReferenceValue.isPlaceholder(Objects.toString(value, "")) ? MASKED_VALUE : value));
+        return result;
+    }
+    
+    /**
+     * Create secret reference summary payload.
+     *
+     * @param request workflow request
+     * @return secret reference summary payload
+     */
+    public static Map<String, Object> createSecretReferenceSummary(final WorkflowRequest request) {
+        List<Map<String, Object>> references = WorkflowSecretReferenceUtils.createSafeSummaries(request);
+        Map<String, Object> result = new LinkedHashMap<>(4, 1F);
+        result.put("required", !references.isEmpty());
+        result.put("reference_count", references.size());
+        result.put("value_handling", "manual_execution");
+        result.put("references", references);
+        return result;
+    }
+    
+    private static Map<String, Object> createRedactionPayload(final WorkflowRequest request, final List<AlgorithmPropertyRequirement> propertyRequirements) {
+        List<String> redactedProperties = collectSecretPropertyNames(request, propertyRequirements).stream().toList();
+        Map<String, Object> result = new LinkedHashMap<>(5, 1F);
+        result.put("applied", !redactedProperties.isEmpty());
+        result.put("marker", MASKED_VALUE);
+        result.put("redacted_properties", redactedProperties);
+        result.put("redacted_count", redactedProperties.size());
+        result.put("categories", redactedProperties.stream().map(WorkflowArtifactMaskUtils::createRedactedCategory).distinct().toList());
+        return result;
+    }
+    
+    private static String createRedactedCategory(final String redactedProperty) {
+        int separatorIndex = redactedProperty.indexOf('.');
+        return 0 > separatorIndex ? redactedProperty : redactedProperty.substring(separatorIndex + 1);
+    }
+    
+    private static Set<String> collectSecretValues(final WorkflowRequest request, final List<AlgorithmPropertyRequirement> propertyRequirements) {
+        Set<String> result = new LinkedHashSet<>();
+        for (AlgorithmPropertyRequirement each : propertyRequirements) {
+            if (!each.isSecret()) {
+                continue;
+            }
+            String value = getPropertyValue(request, each);
+            if (null != value && !value.isBlank()) {
+                result.add(value.trim());
+            }
+        }
+        request.getSecretReferences().forEach((algorithmRole, references) -> references.keySet().forEach(
+                propertyKey -> result.add(SecretReferenceValue.createPlaceholder(algorithmRole, propertyKey))));
+        return result;
+    }
+    
+    private static Set<String> collectSecretPropertyNames(final WorkflowRequest request, final List<AlgorithmPropertyRequirement> propertyRequirements) {
+        Set<String> result = new LinkedHashSet<>();
+        for (AlgorithmPropertyRequirement each : propertyRequirements) {
+            if (!each.isSecret()) {
+                continue;
+            }
+            String value = getPropertyValue(request, each);
+            if (null != value && !value.isBlank()) {
+                result.add(each.getAlgorithmRole() + "." + each.getPropertyKey());
+            }
+        }
+        request.getSecretReferences().forEach((algorithmRole, references) -> references.keySet().forEach(
+                propertyKey -> result.add(algorithmRole + "." + propertyKey)));
+        return result;
+    }
+    
+    private static String getPropertyValue(final WorkflowRequest request, final AlgorithmPropertyRequirement propertyRequirement) {
+        return request.getAlgorithmProperties(propertyRequirement.getAlgorithmRole()).get(propertyRequirement.getPropertyKey());
+    }
+    
+    private static boolean isSecretProperty(final List<AlgorithmPropertyRequirement> propertyRequirements, final String propertyKey) {
+        for (AlgorithmPropertyRequirement each : propertyRequirements) {
+            if (each.isSecret() && propertyKey.equals(each.getPropertyKey())) {
+                return true;
+            }
+        }
+        String actualPropertyKey = propertyKey.toLowerCase(Locale.ENGLISH);
+        return actualPropertyKey.contains("password") || actualPropertyKey.contains("secret") || actualPropertyKey.contains("token")
+                || "key".equals(actualPropertyKey) || actualPropertyKey.contains("-key") || actualPropertyKey.contains("key-")
+                || actualPropertyKey.contains("_key") || actualPropertyKey.contains("key_");
+    }
+    
+}

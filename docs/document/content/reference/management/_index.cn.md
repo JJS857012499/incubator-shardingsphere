@@ -1,72 +1,124 @@
 +++
-pre = "<b>7.1. </b>"
+pre = "<b>7.3. </b>"
 title = "管控"
-weight = 1
+weight = 3
 +++
 
 ## 注册中心数据结构
 
-在定义的命名空间下，`rules` 、`props` 和 `metadata` 节点以 YAML 格式存储配置，可通过修改节点来实现对于配置的动态管理。`status` 存储数据库访问对象运行节点，用于区分不同数据库访问实例。
+在定义的命名空间下，`rules` 、`props` 和 `metadata` 节点以 YAML 格式存储配置，可通过修改节点来实现对于配置的动态管理。
+`nodes` 存储数据库访问对象运行节点，用于区分不同数据库访问实例。
+`statistics` 存储系统表中的数据记录。
 
 ```
 namespace
-   ├──rules                                     # 全局规则配置
-   ├──props                                     # 属性配置
-   ├──metadata                                  # Metadata 配置
-   ├      ├──${schema_1}                        # Schema 名称1
-   ├      ├      ├──dataSources                 # 数据源配置
-   ├      ├      ├──rules                       # 规则配置
-   ├      ├      ├──schema                      # 表结构配置
-   ├      ├──${schema_2}                        # Schema 名称2
-   ├      ├      ├──dataSources                 # 数据源配置
-   ├      ├      ├──rules                       # 规则配置
-   ├      ├      ├──schema                      # 表结构配置
-   ├──status
+   ├──rules                                             # 全局规则配置
+   ├     ├──transaction
+   ├     ├     ├──active_version                                     
+   ├     ├     ├──versions  
+   ├     ├     ├     ├──0       
+   ├──props                                              # 属性配置
+   ├     ├──active_version
+   ├     ├──versions  
+   ├     ├     ├──0                  
+   ├──metadata                                           # Metadata 配置
+   ├     ├──${databaseName} 
+   ├     ├     ├──data_sources                          
+   ├     ├     ├     ├──units 							 # 存储单元结构配置
+   ├     ├     ├     ├    ├──${storageUnitName}
+   ├     ├     ├     ├    ├     ├──active_version             # 激活版本
+   ├     ├     ├     ├    ├     ├──versions                   # 版本号
+   ├     ├     ├     ├    ├     ├     ├──0
+   ├     ├     ├     ├    ├──...   
+   ├     ├     ├     ├──nodes 							 # 存储节点结构配置
+   ├     ├     ├     ├    ├──${storageNodeName}
+   ├     ├     ├     ├    ├──...                             
+   ├     ├     ├──schemas                                   # Schema 列表   
+   ├     ├     ├     ├──${schemaName}                    
+   ├     ├     ├     ├     ├──tables                     # 表结构配置
+   ├     ├     ├     ├     ├     ├──${tableName}         
+   ├     ├     ├     ├     ├     ├     ├──active_version # 激活版本
+   ├     ├     ├     ├     ├     ├     ├──versions       # 版本号
+   ├     ├     ├     ├     ├     ├     ├     ├──0
+   ├     ├     ├     ├     ├     ├──...  
+   ├     ├     ├     ├     ├──views                      # 视图结构配置
+   ├     ├     ├     ├     ├     ├──${viewName}
+   ├     ├     ├     ├     ├     ├     ├──active_version # 激活版本
+   ├     ├     ├     ├     ├     ├     ├──versions       # 版本号
+   ├     ├     ├     ├     ├     ├     ├     ├──0
+   ├     ├     ├     ├     ├     ├──...  
+   ├     ├     ├──rules
+   ├     ├     ├     ├──sharding
+   ├     ├     ├     ├     ├──algorithms
+   ├     ├     ├     ├     ├     ├──${algorithmName}     # algorithm 名称
+   ├     ├     ├     ├     ├     ├     ├──active_version # 激活版本
+   ├     ├     ├     ├     ├     ├     ├──versions       # 版本号
+   ├     ├     ├     ├     ├     ├     ├     ├──0
+   ├     ├     ├     ├     ├     ├──...
+   ├     ├     ├     ├     ├──key_generators
+   ├     ├     ├     ├     ├     ├──${keyGeneratorName}  # keyGenerator名称
+   ├     ├     ├     ├     ├     ├     ├──active_version # 激活版本
+   ├     ├     ├     ├     ├     ├     ├──versions       # 版本号
+   ├     ├     ├     ├     ├     ├     ├     ├──0
+   ├     ├     ├     ├     ├     ├──...         
+   ├     ├     ├     ├     ├──tables
+   ├     ├     ├     ├     ├     ├──${tableName}         # 逻辑表名称
+   ├     ├     ├     ├     ├     ├     ├──active_version # 激活版本
+   ├     ├     ├     ├     ├     ├     ├──versions       # 版本号
+   ├     ├     ├     ├     ├     ├     ├     ├──0
+   ├     ├     ├     ├     ├     ├──...          
+   ├──nodes
    ├    ├──compute_nodes
    ├    ├     ├──online
-   ├    ├     ├     ├──${your_instance_ip_a}@${your_instance_port_x}
-   ├    ├     ├     ├──${your_instance_ip_b}@${your_instance_port_y}
+   ├    ├     ├     ├──proxy
+   ├    ├     ├     ├     ├──UUID             # Proxy 实例唯一标识
+   ├    ├     ├     ├     ├──....
+   ├    ├     ├     ├──jdbc
+   ├    ├     ├     ├     ├──UUID             # JDBC 实例唯一标识
+   ├    ├     ├     ├     ├──....   
+   ├    ├     ├──status
+   ├    ├     ├     ├──UUID                   
    ├    ├     ├     ├──....
-   ├    ├     ├──circuit_breaker
-   ├    ├     ├     ├──${your_instance_ip_c}@${your_instance_port_v}
-   ├    ├     ├     ├──${your_instance_ip_d}@${your_instance_port_w}
+   ├    ├     ├──worker_id
+   ├    ├     ├     ├──UUID
    ├    ├     ├     ├──....
-   ├    ├──storage_nodes
-   ├    ├     ├──disable
-   ├    ├     ├      ├──${schema_1.ds_0}
-   ├    ├     ├      ├──${schema_1.ds_1}
-   ├    ├     ├      ├──....
-   ├    ├     ├──primary
-   ├    ├     ├      ├──${schema_2.ds_0}
-   ├    ├     ├      ├──${schema_2.ds_1}
-   ├    ├     ├      ├──....
+   ├    ├     ├──show_process_list_trigger
+   ├    ├     ├     ├──process_id:UUID
+   ├    ├     ├     ├──....
+   ├    ├──qualified_data_sources                       
+   ├    ├     ├──${databaseName.groupName.dataSourceName} 
+   ├    ├     ├──${databaseName.groupName.dataSourceName}
+   ├──statistics
+   ├    ├──databases
+   ├    ├     ├──shardingsphere
+   ├    ├     ├     ├──schemas
+   ├    ├     ├     ├     ├──shardingsphere
+   ├    ├     ├     ├     ├     ├──tables # 系统表
+   ├    ├     ├     ├     ├     ├   ├──cluster_information    # 集群信息表
 ```
 
 ### /rules
 
-全局规则配置，可包括访问 ShardingSphere-Proxy 用户名和密码的权限配置。
+全局规则配置，事务配置。
 
-```yaml
-- !AUTHORITY
-users:
-  - root@%:root
-  - sharding@127.0.0.1:sharding
-provider:
-  type: ALL_PRIVILEGES_PERMITTED
+```
+transaction:
+  defaultType: XA
+  providerType: Atomikos
 ```
 
 ### /props
 
-属性配置，详情请参见[配置手册](/cn/user-manual/shardingsphere-jdbc/props/)。
+属性配置，详情请参见[配置手册](/cn/user-manual/common-config/props/)。
 
 ```yaml
 kernel-executor-size: 20
 sql-show: true
 ```
 
-### /metadata/${schemaName}/dataSources
+### /metadata/${databaseName}/data_sources/units/ds_0/versions/0
 
-多个数据库连接池的集合，不同数据库连接池属性自适配（例如：DBCP，C3P0，Druid, HikariCP）。
+数据库连接池的，不同数据库连接池属性自适配（例如：DBCP，C3P0，Druid，HikariCP）。
 
 ```yaml
 ds_0:
@@ -83,77 +135,70 @@ ds_0:
   connectionTimeout: 30000
   username: root
   poolName: HikariPool-1
-ds_1:
-  initializationFailTimeout: 1
-  validationTimeout: 5000
-  maxLifetime: 1800000
-  leakDetectionThreshold: 0
-  minimumIdle: 1
-  password: root
-  idleTimeout: 60000
-  jdbcUrl: jdbc:mysql://127.0.0.1:3306/ds_1?serverTimezone=UTC&useSSL=false
-  dataSourceClassName: com.zaxxer.hikari.HikariDataSource
-  maximumPoolSize: 50
-  connectionTimeout: 30000
-  username: root
-  poolName: HikariPool-2
 ```
+### /metadata/${databaseName}/rules/sharding/tables/t_order/versions/0
 
-### /metadata/${schemaName}/rules
-
-规则配置，可包括数据分片、读写分离、数据加密、影子库压测等配置。
+分片表元数据节点持久化内容，不是用户直接编写的规则 YAML 格式。
 
 ```yaml
-- !SHARDING
-  xxx
-  
-- !READWRITE_SPLITTING
-  xxx
-  
-- !ENCRYPT
-  xxx
+actualDataNodes: ds_${0..1}.t_order_${0..1}
+auditStrategy:
+  allowHintDisable: true
+  auditorNames:
+    - t_order_dml_sharding_conditions_0
+databaseStrategy:
+  standard:
+    shardingAlgorithmName: t_order_database_inline
+    shardingColumn: user_id
+logicTable: t_order
+tableStrategy:
+  standard:
+    shardingAlgorithmName: t_order_table_inline
+    shardingColumn: order_id
 ```
 
-### /metadata/${schemaName}/schema
+### /metadata/${databaseName}/rules/sharding/key_generate_strategies/t_order_another_id/versions/0
 
-表结构配置，暂不支持动态修改。
+分布式序列策略元数据节点持久化内容。
 
 ```yaml
-tables:                                       # 表
-  t_order:                                    # 表名
-    columns:                                  # 列
-      id:                                     # 列名
-        caseSensitive: false
-        dataType: 0
-        generated: false
-        name: id
-        primaryKey: trues
-      order_id:
-        caseSensitive: false
-        dataType: 0
-        generated: false
-        name: order_id
-        primaryKey: false
-    indexs:                                   # 索引
-      t_user_order_id_index:                  # 索引名
-        name: t_user_order_id_index
-  t_order_item:
-    columns:
-      order_id:
-        caseSensitive: false
-        dataType: 0
-        generated: false
-        name: order_id
-        primaryKey: false
+keyGenerateType: column
+keyGeneratorName: t_order_snowflake
+logicTable: t_order
+keyGenerateColumn: another_id
 ```
 
-### /status/compute_nodes
+### /metadata/${databaseName}/schemas/${schemaName}/tables/t_order/versions/0
+
+表结构配置，每个表使用单独节点存储。
+
+```yaml
+name: t_order                             # 表名
+columns:                                  # 列
+  id:                                     # 列名
+    caseSensitive: false
+    dataType: 0
+    generated: false
+    name: id
+    primaryKey: true
+  order_id:
+    caseSensitive: false
+    dataType: 0
+    generated: false
+    name: order_id
+    primaryKey: false
+indexes:                                  # 索引
+  t_user_order_id_index:                  # 索引名
+    name: t_user_order_id_index
+```
+
+### /nodes/compute_nodes
 
 数据库访问对象运行实例信息，子节点是当前运行实例的标识。
-运行实例标识由运行服务器的 IP 地址和 PORT 构成。
+运行实例标识使用 UUID 生成，每次启动重新生成。
 运行实例标识均为临时节点，当实例上线时注册，下线时自动清理。
 注册中心监控这些节点的变化来治理运行中实例对数据库的访问等。
 
-### /status/storage_nodes
+### /nodes/qualified_data_sources
 
-可以治理读写分离从库，可动态添加删除以及禁用。
+可以治理读写分离从库，可动态禁用。

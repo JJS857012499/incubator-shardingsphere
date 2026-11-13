@@ -1,5 +1,6 @@
 +++
 title = "分片利器 AutoTable：为用户带来「管家式」分片配置体验"
+translationKey = "Oct_12_6_AutoTable_Your_Butler_Like_Sharding_Configuration_Tool"
 weight = 22
 chapter = true
 +++
@@ -16,7 +17,7 @@ SphereEx 中间件研发工程师，Apache ShardingSphere contributor。目前�
 
 **Sharding**是 Apache ShardingSphere 的核心特性，也是 ShardingSphere 最被人们熟知的一项能力。在过去，用户若需要进行分库分表，一种典型的实施流程（不含数据迁移）如下：
 
-![](../../static/img/Blog_22_img_4_Rewarded_User_Issue_Snapshot.png)
+![](https://shardingsphere.apache.org/blog/img/Blog_22_img_1_sharding_workflow_en.png)
 
 					图1 Sharding 实施流程示意图
 
@@ -24,7 +25,7 @@ SphereEx 中间件研发工程师，Apache ShardingSphere contributor。目前�
 
 以上述分库分表场景为例，实际的数据表分布情况可能如下：
 
-![](../../static/img/Blog_22_img_2_8_Databases_4_Tables_Distribution.png)
+![](https://shardingsphere.apache.org/blog/img/Blog_22_img_2_8_Databases_4_Tables_Distribution.png)
 
 					图2 8 库 * 4 表分布示意图
 
@@ -66,7 +67,7 @@ shardingAlgorithms:
 
 如这位用户提出的 issue：
 
-![](../../static/img/Blog_22_img_3_Question_Comment.png)
+![](https://shardingsphere.apache.org/blog/img/Blog_22_img_3_Question_Comment.png)
 
 ## AutoTable 横空出世
 
@@ -116,7 +117,7 @@ SHARDING_COLUMN=order_id,TYPE(NAME=hash_mod,PROPERTIES("sharding-count"=10))
 DROP SHARDING TABLE RULE t_order;
 ~~~
 
-**注：**若规则修改影响到存量数据，ShardingSphere 还将提供“弹性扩缩容”的功能用作数据迁移，帮助用户方便快捷的管理分布式数据。有关“弹性扩缩容”的具体细节，请关注后续推送。
+**注：** 若规则修改影响到存量数据，ShardingSphere 还将提供“弹性扩缩容”的功能用作数据迁移，帮助用户方便快捷的管理分布式数据。有关“弹性扩缩容”的具体细节，请关注后续推送。
 
 ### FAQ
 
@@ -141,7 +142,7 @@ AutoTable 支持全部的自动分片算法，包括：
 * AUTO_INTERVAL：自动时间段分片算法
 
 关于以上算法的更多详细信息，请阅读 **Apache ShardingSphere 官方文档-自动分片算法：**
-https://shardingsphere.apache.org/document/current/cn/user-manual/shardingsphere-jdbc/builtin-algorithm/sharding/
+https://shardingsphere.apache.org/document/current/cn/user-manual/common-config/builtin-algorithm/sharding/
 
 除内置算法外，用户也可以通过 SPI 扩展的方式加载自定义的分片算法，满足更加定制化的分片需求。
 
@@ -182,7 +183,7 @@ https://github.com/apache/shardingsphere/blob/master/shardingsphere-jdbc/shardin
 
 GitHub ID 为 @CatYangWei 的用户第一个发现并提出了关于 AutoTable 相关的问题：
 
-图5![]()
+图5![](https://shardingsphere.apache.org/blog/img/Blog_22_img_4_Rewarded_User_Issue_Snapshot.png)
 
 感谢这位细心的用户，我们将会通过 GitHub 与您联系，并送上社区的精美周边。👏👏👏也欢迎更多的社区小伙伴向我们提出优化建议，帮助社区更好地成长～
 
@@ -196,4 +197,4 @@ https://github.com/apache/shardingsphere/issues
 
 **贡献指南：**
 
-https://shardingsphere.apache.org/community/cn/contribute/
+https://shardingsphere.apache.org/community/cn/involved/

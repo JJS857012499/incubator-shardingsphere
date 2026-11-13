@@ -1,72 +1,124 @@
 +++
-pre = "<b>7.1. </b>"
+pre = "<b>7.3. </b>"
 title = "Management"
-weight = 1
+weight = 3
 +++
 
 ## Data Structure in Registry Center
 
-Under defined namespace, `rules`, `props` and `metadata` nodes persist in YAML, modifying nodes can dynamically refresh configurations. `status` node persist the runtime node of database access object, to distinguish different database access instances.
+Under a defined namespace, `rules`, `props` and `metadata` nodes persist in YAML. Modifying nodes can dynamically refresh configurations.
+`nodes` persist the runtime node of the database access object, to distinguish different database access instances.
+`statistics` persist data records in system tables.
 
 ```
 namespace
-   ├──rules                                     # Global rule configuration
-   ├──props                                     # Properties configuration
-   ├──metadata                                  # Metadata configuration
-   ├      ├──${schema_1}                        # Schema name 1
-   ├      ├      ├──dataSources                 # Datasource configuration
-   ├      ├      ├──rules                       # Rule configuration
-   ├      ├      ├──schema                      # Table configuration
-   ├      ├──${schema_2}                        # Schema name 2
-   ├      ├      ├──dataSources                 # Datasource configuration
-   ├      ├      ├──rules                       # Rule configuration
-   ├      ├      ├──schema                      # Table configuration
-   ├──status
+   ├──rules                                              # Global rule configuration
+   ├     ├──transaction
+   ├     ├     ├──active_version                                     
+   ├     ├     ├──versions  
+   ├     ├     ├     ├──0       
+   ├──props                                              # Properties configuration
+   ├     ├──active_version
+   ├     ├──versions  
+   ├     ├     ├──0                  
+   ├──metadata                                           # Metadata configuration
+   ├     ├──${databaseName} 
+   ├     ├     ├──data_sources                          
+   ├     ├     ├     ├──units 							 # Storage unit configuration
+   ├     ├     ├     ├    ├──${storageUnitName}
+   ├     ├     ├     ├    ├     ├──active_version             # Active version
+   ├     ├     ├     ├    ├     ├──versions                   # version list
+   ├     ├     ├     ├    ├     ├     ├──0
+   ├     ├     ├     ├    ├──...   
+   ├     ├     ├     ├──nodes 							 # Storage node configuration
+   ├     ├     ├     ├    ├──${storageNodeName}
+   ├     ├     ├     ├    ├──...                             
+   ├     ├     ├──schemas                                # Schema list
+   ├     ├     ├     ├──${schemaName}                    
+   ├     ├     ├     ├     ├──tables                     # Table configuration
+   ├     ├     ├     ├     ├     ├──${tableName}         
+   ├     ├     ├     ├     ├     ├     ├──active_version # Active version
+   ├     ├     ├     ├     ├     ├     ├──versions       # version list
+   ├     ├     ├     ├     ├     ├     ├     ├──0
+   ├     ├     ├     ├     ├     ├──...  
+   ├     ├     ├     ├     ├──views                      # View configuration
+   ├     ├     ├     ├     ├     ├──${viewName}
+   ├     ├     ├     ├     ├     ├     ├──active_version # Active version
+   ├     ├     ├     ├     ├     ├     ├──versions       # version list
+   ├     ├     ├     ├     ├     ├     ├     ├──0
+   ├     ├     ├     ├     ├     ├──...  
+   ├     ├     ├──rules
+   ├     ├     ├     ├──sharding
+   ├     ├     ├     ├     ├──algorithms
+   ├     ├     ├     ├     ├     ├──${algorithmName}     # algorithm name
+   ├     ├     ├     ├     ├     ├     ├──active_version # Active version
+   ├     ├     ├     ├     ├     ├     ├──versions       # version list
+   ├     ├     ├     ├     ├     ├     ├     ├──0
+   ├     ├     ├     ├     ├     ├──...
+   ├     ├     ├     ├     ├──key_generators
+   ├     ├     ├     ├     ├     ├──${keyGeneratorName}  # keyGenerator name
+   ├     ├     ├     ├     ├     ├     ├──active_version # Active version
+   ├     ├     ├     ├     ├     ├     ├──versions       # version list
+   ├     ├     ├     ├     ├     ├     ├     ├──0
+   ├     ├     ├     ├     ├     ├──...         
+   ├     ├     ├     ├     ├──tables
+   ├     ├     ├     ├     ├     ├──${tableName}         # logic table name
+   ├     ├     ├     ├     ├     ├     ├──active_version # Active version
+   ├     ├     ├     ├     ├     ├     ├──versions       # version list
+   ├     ├     ├     ├     ├     ├     ├     ├──0
+   ├     ├     ├     ├     ├     ├──...          
+   ├──nodes
    ├    ├──compute_nodes
    ├    ├     ├──online
-   ├    ├     ├     ├──${your_instance_ip_a}@${your_instance_port_x}
-   ├    ├     ├     ├──${your_instance_ip_b}@${your_instance_port_y}
+   ├    ├     ├     ├──proxy
+   ├    ├     ├     ├     ├──UUID             # Proxy instance identifier
+   ├    ├     ├     ├     ├──....
+   ├    ├     ├     ├──jdbc
+   ├    ├     ├     ├     ├──UUID             # JDBC instance identifier
+   ├    ├     ├     ├     ├──....   
+   ├    ├     ├──status
+   ├    ├     ├     ├──UUID                   
    ├    ├     ├     ├──....
-   ├    ├     ├──circuit_breaker
-   ├    ├     ├     ├──${your_instance_ip_c}@${your_instance_port_v}
-   ├    ├     ├     ├──${your_instance_ip_d}@${your_instance_port_w}
+   ├    ├     ├──worker_id
+   ├    ├     ├     ├──UUID
    ├    ├     ├     ├──....
-   ├    ├──storage_nodes
-   ├    ├     ├──disable
-   ├    ├     ├      ├──${schema_1.ds_0}
-   ├    ├     ├      ├──${schema_1.ds_1}
-   ├    ├     ├      ├──....
-   ├    ├     ├──primary
-   ├    ├     ├      ├──${schema_2.ds_0}
-   ├    ├     ├      ├──${schema_2.ds_1}
-   ├    ├     ├      ├──....
+   ├    ├     ├──show_process_list_trigger
+   ├    ├     ├     ├──process_id:UUID
+   ├    ├     ├     ├──....
+   ├    ├──qualified_data_sources                       
+   ├    ├     ├──${databaseName.groupName.dataSourceName}
+   ├    ├     ├──${databaseName.groupName.dataSourceName}
+   ├──statistics
+   ├    ├──databases
+   ├    ├     ├──shardingsphere
+   ├    ├     ├     ├──schemas
+   ├    ├     ├     ├     ├──shardingsphere
+   ├    ├     ├     ├     ├     ├──tables # system tables
+   ├    ├     ├     ├     ├     ├   ├──cluster_information    # cluster information table
 ```
 
 ### /rules
 
-global rule configurations， including configure the username and password for ShardingSphere-Proxy.
+These are the global rule configurations, transaction configuration.
 
-```yaml
-- !AUTHORITY
-users:
-  - root@%:root
-  - sharding@127.0.0.1:sharding
-provider:
-  type: ALL_PRIVILEGES_PERMITTED
+```
+transaction:
+  defaultType: XA
+  providerType: Atomikos
 ```
 
 ### /props
 
-Properties configuration. Please refer to [Configuration Manual](/en/user-manual/shardingsphere-jdbc/props/) for more details.
+These are the properties' configurations. Please refer to the [Configuration Manual](/en/user-manual/common-config/props/) for more details.
 
 ```yaml
 kernel-executor-size: 20
 sql-show: true
 ```
 
-### /metadata/${schemaName}/dataSources
+### /metadata/${databaseName}/data_sources/units/ds_0/versions/0
 
-A collection of multiple database connection pools, whose properties (e.g. DBCP, C3P0, Druid and HikariCP) are configured by users themselves.
+Database connection pools, whose properties (e.g. HikariCP) are to be configured by the user.
 
 ```yaml
 ds_0:
@@ -83,74 +135,70 @@ ds_0:
   connectionTimeout: 30000
   username: root
   poolName: HikariPool-1
-ds_1:
-  initializationFailTimeout: 1
-  validationTimeout: 5000
-  maxLifetime: 1800000
-  leakDetectionThreshold: 0
-  minimumIdle: 1
-  password: root
-  idleTimeout: 60000
-  jdbcUrl: jdbc:mysql://127.0.0.1:3306/ds_1?serverTimezone=UTC&useSSL=false
-  dataSourceClassName: com.zaxxer.hikari.HikariDataSource
-  maximumPoolSize: 50
-  connectionTimeout: 30000
-  username: root
-  poolName: HikariPool-2
 ```
 
-### /metadata/${schemaName}/rules
+### /metadata/${databaseName}/rules/sharding/tables/t_order/versions/0
 
-Rule configurations, including sharding, readwrite-splitting, data encryption, shadow DB configurations.
+Persisted content of the sharding table metadata node, not the user-facing rule YAML format.
 
 ```yaml
-- !SHARDING
-  xxx
-  
-- !READWRITE_SPLITTING
-  xxx
-  
-- !ENCRYPT
-  xxx
+actualDataNodes: ds_${0..1}.t_order_${0..1}
+auditStrategy:
+  allowHintDisable: true
+  auditorNames:
+    - t_order_dml_sharding_conditions_0
+databaseStrategy:
+  standard:
+    shardingAlgorithmName: t_order_database_inline
+    shardingColumn: user_id
+logicTable: t_order
+tableStrategy:
+  standard:
+    shardingAlgorithmName: t_order_table_inline
+    shardingColumn: order_id
 ```
 
-### /metadata/${schemaName}/schema
+### /metadata/${databaseName}/rules/sharding/key_generate_strategies/t_order_another_id/versions/0
 
-Dynamic modification of metadata content is not supported currently.
+Persisted content of the sharding key generate strategy metadata node.
 
 ```yaml
-tables:                                       # Tables
-  t_order:                                    # table_name
-    columns:                                  # Columns
-      id:                                     # column_name
-        caseSensitive: false
-        dataType: 0
-        generated: false
-        name: id
-        primaryKey: trues
-      order_id:
-        caseSensitive: false
-        dataType: 0
-        generated: false
-        name: order_id
-        primaryKey: false
-    indexs:                                   # Indexes
-      t_user_order_id_index:                  # index_name
-        name: t_user_order_id_index
-  t_order_item:
-    columns:
-      order_id:
-        caseSensitive: false
-        dataType: 0
-        generated: false
-        name: order_id
-        primaryKey: false
+keyGenerateType: column
+keyGeneratorName: t_order_snowflake
+logicTable: t_order
+keyGenerateColumn: another_id
 ```
 
-### /status/compute_nodes
+### /metadata/${databaseName}/schemas/${schemaName}/tables/t_order/versions/0
 
-It includes running instance information of database access object, with sub-nodes as the identifiers of currently running instance, which consist of IP and PORT. Those identifiers are temporary nodes, which are registered when instances are on-line and cleared when instances are off-line. The registry center monitors the change of those nodes to govern the database access of running instances and other things.
+Use separate node storage for each table.
 
-### /status/storage_nodes
+```yaml
+name: t_order                             # Table name
+columns:                                  # Columns
+  id:                                     # Column name
+    caseSensitive: false
+    dataType: 0
+    generated: false
+    name: id
+    primaryKey: true
+  order_id:
+    caseSensitive: false
+    dataType: 0
+    generated: false
+    name: order_id
+    primaryKey: false
+indexes:                                  # Index
+  t_user_order_id_index:                  # Index name
+    name: t_user_order_id_index
+```
 
-It is able to orchestrate replica database, delete or disable data dynamically.
+### /nodes/compute_nodes
+
+It includes running instance information of database access object, with sub-nodes as the identifiers of the currently running instance, which is automatically generated at each startup using UUID.
+
+The identifiers are temporary nodes, which are registered when instances are online and cleared when instances are offline. The registry center monitors the change of those nodes to govern the database access of running instances and other things.
+
+### /nodes/qualified_data_sources
+
+It can orchestrate a replica database on readwrite-splitting feature, disable data dynamically.

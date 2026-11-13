@@ -1,0 +1,79 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.mcp.core.tool.handler.workflow;
+
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import org.apache.shardingsphere.mcp.api.session.MCPSessionIdentity;
+import org.apache.shardingsphere.mcp.support.MCPFeatureRequestContext;
+import org.apache.shardingsphere.mcp.support.database.spi.MCPFeatureExecutionFacade;
+import org.apache.shardingsphere.mcp.support.database.spi.MCPFeatureQueryFacade;
+import org.apache.shardingsphere.mcp.support.workflow.WorkflowSessionContext;
+import org.apache.shardingsphere.mcp.support.workflow.model.WorkflowContextSnapshot;
+import org.apache.shardingsphere.mcp.support.workflow.model.WorkflowKind;
+import org.apache.shardingsphere.mcp.support.workflow.spi.MCPWorkflowApplyArtifactValidator;
+import org.apache.shardingsphere.mcp.support.workflow.spi.MCPWorkflowRuntimeHandler;
+import org.apache.shardingsphere.mcp.support.workflow.spi.WorkflowRuntimeDefinition;
+
+import java.util.Map;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+final class WorkflowHandlerTestFixture {
+    
+    static Context createContext(final WorkflowContextSnapshot snapshot) {
+        MCPFeatureRequestContext result = mock(MCPFeatureRequestContext.class);
+        WorkflowSessionContext workflowSessionContext = mock(WorkflowSessionContext.class);
+        MCPFeatureQueryFacade queryFacade = mock(MCPFeatureQueryFacade.class);
+        MCPFeatureExecutionFacade executionFacade = mock(MCPFeatureExecutionFacade.class);
+        when(result.getSessionIdentity()).thenReturn(new MCPSessionIdentity("session-1", "", "", Map.of()));
+        when(result.getWorkflowSessionContext()).thenReturn(workflowSessionContext);
+        when(result.getQueryFacade()).thenReturn(queryFacade);
+        when(result.getExecutionFacade()).thenReturn(executionFacade);
+        when(workflowSessionContext.getRequired("plan-1")).thenReturn(snapshot);
+        return new Context(result, workflowSessionContext, queryFacade, executionFacade);
+    }
+    
+    static WorkflowContextSnapshot createSnapshot() {
+        WorkflowContextSnapshot result = createSnapshotWithoutWorkflowKind();
+        result.setWorkflowKind(WorkflowKind.valueOf("encrypt.rule"));
+        return result;
+    }
+    
+    static WorkflowContextSnapshot createSnapshotWithoutWorkflowKind() {
+        WorkflowContextSnapshot result = new WorkflowContextSnapshot();
+        result.setPlanId("plan-1");
+        result.setSessionId("session-1");
+        return result;
+    }
+    
+    static WorkflowRuntimeDefinition createDefinition(final String workflowKind) {
+        return new WorkflowRuntimeDefinition(WorkflowKind.valueOf(workflowKind), mock(MCPWorkflowRuntimeHandler.class));
+    }
+    
+    static WorkflowRuntimeDefinition createDefinition(final String workflowKind, final MCPWorkflowRuntimeHandler runtimeHandler,
+                                                      final MCPWorkflowApplyArtifactValidator applyArtifactValidator) {
+        return new WorkflowRuntimeDefinition(WorkflowKind.valueOf(workflowKind), runtimeHandler, applyArtifactValidator);
+    }
+    
+    record Context(MCPFeatureRequestContext requestContext, WorkflowSessionContext workflowSessionContext,
+                   MCPFeatureQueryFacade queryFacade, MCPFeatureExecutionFacade executionFacade) {
+    }
+}

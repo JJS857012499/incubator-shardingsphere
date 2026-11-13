@@ -1,0 +1,262 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.proxy.backend.util;
+
+import org.apache.shardingsphere.database.connector.core.type.DatabaseType;
+import org.apache.shardingsphere.distsql.handler.executor.configuration.imports.YamlDatabaseConfigurationImportExecutor;
+import org.apache.shardingsphere.distsql.handler.validate.DistSQLDataSourcePoolPropertiesValidator;
+import org.apache.shardingsphere.infra.config.props.ConfigurationProperties;
+import org.apache.shardingsphere.infra.config.props.temporary.TemporaryConfigurationProperties;
+import org.apache.shardingsphere.infra.config.rule.RuleConfiguration;
+import org.apache.shardingsphere.infra.config.rule.checker.DatabaseRuleConfigurationCheckEngine;
+import org.apache.shardingsphere.infra.database.DatabaseTypeEngine;
+import org.apache.shardingsphere.infra.datasource.pool.creator.DataSourcePoolCreator;
+import org.apache.shardingsphere.infra.datasource.pool.props.domain.DataSourcePoolProperties;
+import org.apache.shardingsphere.infra.exception.external.sql.ShardingSphereSQLException;
+import org.apache.shardingsphere.infra.metadata.database.ShardingSphereDatabase;
+import org.apache.shardingsphere.infra.metadata.database.resource.ResourceMetaData;
+import org.apache.shardingsphere.infra.metadata.database.resource.node.StorageNode;
+import org.apache.shardingsphere.infra.metadata.database.resource.unit.StorageUnit;
+import org.apache.shardingsphere.infra.metadata.database.resource.unit.StorageUnitNodeMapCreator;
+import org.apache.shardingsphere.infra.rule.ShardingSphereRule;
+import org.apache.shardingsphere.infra.rule.builder.database.DatabaseRuleBuilder;
+import org.apache.shardingsphere.infra.rule.scope.DatabaseRule;
+import org.apache.shardingsphere.infra.spi.type.ordered.OrderedSPILoader;
+import org.apache.shardingsphere.mode.manager.ContextManager;
+import org.apache.shardingsphere.mode.metadata.MetaDataContexts;
+import org.apache.shardingsphere.mode.metadata.persist.config.database.DatabaseRulePersistService;
+import org.apache.shardingsphere.mode.persist.service.MetaDataManagerPersistService;
+import org.apache.shardingsphere.single.config.SingleRuleConfiguration;
+import org.apache.shardingsphere.single.rule.SingleRule;
+import org.apache.shardingsphere.test.infra.framework.extension.mock.AutoMockExtension;
+import org.apache.shardingsphere.test.infra.framework.extension.mock.StaticMockSettings;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Answers;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockedConstruction;
+import org.mockito.internal.configuration.plugins.Plugins;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.Properties;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(AutoMockExtension.class)
+@StaticMockSettings({
+        DataSourcePoolCreator.class,
+        StorageUnitNodeMapCreator.class,
+        DatabaseTypeEngine.class,
+        OrderedSPILoader.class,
+        DatabaseRuleConfigurationCheckEngine.class
+})
+class YamlDatabaseConfigurationImportExecutorTest {
+    
+    @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+    private ContextManager contextManager;
+    
+    @Mock
+    private DistSQLDataSourcePoolPropertiesValidator validateHandler;
+    
+    private YamlDatabaseConfigurationImportExecutor executor;
+    
+    @BeforeEach
+    void setUp() throws ReflectiveOperationException {
+        executor = new YamlDatabaseConfigurationImportExecutor(contextManager);
+        Plugins.getMemberAccessor().set(YamlDatabaseConfigurationImportExecutor.class.getDeclaredField("validateHandler"), executor, validateHandler);
+    }
+    
+    @Test
+    void assertImportDatabaseConfigurationWhenRulesEmpty() {
+        Map<String, StorageUnit> storageUnits = new HashMap<>(1, 1F);
+        mockMetaDataContexts(mockDatabase(storageUnits, Collections.emptyList()), new ConfigurationProperties(new Properties()));
+        MetaDataManagerPersistService metaDataManagerService = mock(MetaDataManagerPersistService.class);
+        when(contextManager.getPersistServiceFacade().getModeFacade().getMetaDataManagerService()).thenReturn(metaDataManagerService);
+        DatabaseRulePersistService databaseRulePersistService = mock(DatabaseRulePersistService.class);
+        when(contextManager.getPersistServiceFacade().getMetaDataFacade().getDatabaseRuleService()).thenReturn(databaseRulePersistService);
+        when(StorageUnitNodeMapCreator.create(anyMap(), anyBoolean())).thenReturn(Collections.singletonMap("foo_ds", mock(StorageNode.class)));
+        when(DatabaseTypeEngine.getProtocolType(anyMap(), any(ConfigurationProperties.class))).thenReturn(mock(DatabaseType.class));
+        try (MockedConstruction<StorageUnit> mockedConstruction = mockConstruction(StorageUnit.class)) {
+            executor.importDatabaseConfiguration("foo_db", Collections.singletonMap("foo_ds", mock(DataSourcePoolProperties.class)), Collections.emptyList());
+            assertThat(storageUnits.get("foo_ds"), is(mockedConstruction.constructed().get(0)));
+        }
+        verify(metaDataManagerService).createDatabase("foo_db");
+        verify(metaDataManagerService).registerStorageUnits(eq("foo_db"), anyMap());
+        verify(databaseRulePersistService, never()).persist(anyString(), anyCollection());
+    }
+    
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    @Test
+    void assertImportDatabaseConfigurationWhenRulesProvided() {
+        Map<String, StorageUnit> storageUnits = new HashMap<>(1, 1F);
+        Collection<ShardingSphereRule> rules = new LinkedList<>();
+        mockMetaDataContexts(mockDatabase(storageUnits, rules), new ConfigurationProperties(new Properties()));
+        MetaDataManagerPersistService metaDataManagerService = mock(MetaDataManagerPersistService.class);
+        when(contextManager.getPersistServiceFacade().getModeFacade().getMetaDataManagerService()).thenReturn(metaDataManagerService);
+        DatabaseRulePersistService databaseRulePersistService = mock(DatabaseRulePersistService.class);
+        when(contextManager.getPersistServiceFacade().getMetaDataFacade().getDatabaseRuleService()).thenReturn(databaseRulePersistService);
+        when(StorageUnitNodeMapCreator.create(anyMap(), anyBoolean())).thenReturn(Collections.singletonMap("foo_ds", mock(StorageNode.class)));
+        when(DatabaseTypeEngine.getProtocolType(anyMap(), any(ConfigurationProperties.class))).thenReturn(mock(DatabaseType.class));
+        RuleConfiguration ruleConfig = mock(RuleConfiguration.class);
+        DatabaseRuleBuilder builder = mock(DatabaseRuleBuilder.class);
+        DatabaseRule expectedRule = mock(DatabaseRule.class);
+        when(builder.build(eq(ruleConfig), anyString(), any(DatabaseType.class), any(ResourceMetaData.class), anyCollection(), any())).thenReturn(expectedRule);
+        when(OrderedSPILoader.getServices(DatabaseRuleBuilder.class, Collections.singleton(ruleConfig))).thenReturn(Collections.singletonMap(ruleConfig, builder));
+        try (MockedConstruction<StorageUnit> mockedConstruction = mockConstruction(StorageUnit.class, (mock, context) -> {
+        })) {
+            executor.importDatabaseConfiguration("foo_db", Collections.singletonMap("foo_ds", mock(DataSourcePoolProperties.class)), Collections.singletonList(ruleConfig));
+            assertThat(storageUnits.get("foo_ds"), is(mockedConstruction.constructed().get(0)));
+        }
+        assertThat(rules, is(Collections.singletonList(expectedRule)));
+        ArgumentCaptor<Collection<RuleConfiguration>> ruleConfigsCaptor = ArgumentCaptor.forClass(Collection.class);
+        verify(databaseRulePersistService).persist(eq("foo_db"), ruleConfigsCaptor.capture());
+        assertThat(ruleConfigsCaptor.getValue(), is(Collections.singletonList(ruleConfig)));
+    }
+    
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    @Test
+    void assertImportDatabaseConfigurationReplacesDefaultSingleRule() {
+        Map<String, StorageUnit> storageUnits = new HashMap<>(1, 1F);
+        Collection<ShardingSphereRule> rules = new LinkedList<>();
+        SingleRule existedRule = mock(SingleRule.class);
+        when(existedRule.getConfiguration()).thenReturn(new SingleRuleConfiguration());
+        rules.add(existedRule);
+        mockMetaDataContexts(mockDatabase(storageUnits, rules), new ConfigurationProperties(new Properties()));
+        MetaDataManagerPersistService metaDataManagerService = mock(MetaDataManagerPersistService.class);
+        when(contextManager.getPersistServiceFacade().getModeFacade().getMetaDataManagerService()).thenReturn(metaDataManagerService);
+        DatabaseRulePersistService databaseRulePersistService = mock(DatabaseRulePersistService.class);
+        when(contextManager.getPersistServiceFacade().getMetaDataFacade().getDatabaseRuleService()).thenReturn(databaseRulePersistService);
+        when(StorageUnitNodeMapCreator.create(anyMap(), anyBoolean())).thenReturn(Collections.singletonMap("foo_ds", mock(StorageNode.class)));
+        when(DatabaseTypeEngine.getProtocolType(anyMap(), any(ConfigurationProperties.class))).thenReturn(mock(DatabaseType.class));
+        SingleRuleConfiguration ruleConfig = new SingleRuleConfiguration();
+        ruleConfig.setDefaultDataSource("foo_ds");
+        DatabaseRuleBuilder builder = mock(DatabaseRuleBuilder.class);
+        SingleRule importedRule = mock(SingleRule.class);
+        when(builder.build(eq(ruleConfig), anyString(), any(DatabaseType.class), any(ResourceMetaData.class), anyCollection(), any())).thenReturn(importedRule);
+        when(OrderedSPILoader.getServices(DatabaseRuleBuilder.class, Collections.singleton(ruleConfig))).thenReturn(Collections.singletonMap(ruleConfig, builder));
+        try (MockedConstruction<StorageUnit> ignored = mockConstruction(StorageUnit.class)) {
+            executor.importDatabaseConfiguration("foo_db", Collections.singletonMap("foo_ds", mock(DataSourcePoolProperties.class)), Collections.singletonList(ruleConfig));
+        }
+        assertThat(rules, contains(importedRule));
+        ArgumentCaptor<Collection<RuleConfiguration>> ruleConfigsCaptor = ArgumentCaptor.forClass(Collection.class);
+        verify(databaseRulePersistService).persist(eq("foo_db"), ruleConfigsCaptor.capture());
+        assertThat(ruleConfigsCaptor.getValue(), is(Collections.singletonList(ruleConfig)));
+    }
+    
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    @Test
+    void assertImportDatabaseConfigurationWhenSingleRuleCreatedDuringStorageUnitRegistration() {
+        Map<String, StorageUnit> storageUnits = new HashMap<>(1, 1F);
+        Collection<ShardingSphereRule> rules = new LinkedList<>();
+        mockMetaDataContexts(mockDatabase(storageUnits, rules), new ConfigurationProperties(new Properties()));
+        MetaDataManagerPersistService metaDataManagerService = mock(MetaDataManagerPersistService.class);
+        when(contextManager.getPersistServiceFacade().getModeFacade().getMetaDataManagerService()).thenReturn(metaDataManagerService);
+        SingleRule existedRule = mock(SingleRule.class);
+        when(existedRule.getConfiguration()).thenReturn(new SingleRuleConfiguration());
+        doAnswer(invocation -> {
+            rules.add(existedRule);
+            return null;
+        }).when(metaDataManagerService).registerStorageUnits(eq("foo_db"), anyMap());
+        DatabaseRulePersistService databaseRulePersistService = mock(DatabaseRulePersistService.class);
+        when(contextManager.getPersistServiceFacade().getMetaDataFacade().getDatabaseRuleService()).thenReturn(databaseRulePersistService);
+        when(StorageUnitNodeMapCreator.create(anyMap(), anyBoolean())).thenReturn(Collections.singletonMap("foo_ds", mock(StorageNode.class)));
+        when(DatabaseTypeEngine.getProtocolType(anyMap(), any(ConfigurationProperties.class))).thenReturn(mock(DatabaseType.class));
+        SingleRuleConfiguration ruleConfig = new SingleRuleConfiguration();
+        ruleConfig.setDefaultDataSource("foo_ds");
+        DatabaseRuleBuilder builder = mock(DatabaseRuleBuilder.class);
+        SingleRule importedRule = mock(SingleRule.class);
+        when(builder.build(eq(ruleConfig), anyString(), any(DatabaseType.class), any(ResourceMetaData.class), anyCollection(), any())).thenReturn(importedRule);
+        when(OrderedSPILoader.getServices(DatabaseRuleBuilder.class, Collections.singleton(ruleConfig))).thenReturn(Collections.singletonMap(ruleConfig, builder));
+        try (MockedConstruction<StorageUnit> ignored = mockConstruction(StorageUnit.class)) {
+            executor.importDatabaseConfiguration("foo_db", Collections.singletonMap("foo_ds", mock(DataSourcePoolProperties.class)), Collections.singletonList(ruleConfig));
+        }
+        assertThat(rules, contains(importedRule));
+        ArgumentCaptor<Collection<RuleConfiguration>> ruleConfigsCaptor = ArgumentCaptor.forClass(Collection.class);
+        verify(databaseRulePersistService).persist(eq("foo_db"), ruleConfigsCaptor.capture());
+        assertThat(ruleConfigsCaptor.getValue(), is(Collections.singletonList(ruleConfig)));
+    }
+    
+    @Test
+    void assertImportDatabaseConfigurationWhenImportDataSourcesFailed() {
+        ShardingSphereDatabase database = mockDatabase(Collections.emptyMap(), Collections.emptyList());
+        mockMetaDataContexts(database, new ConfigurationProperties(new Properties()));
+        MetaDataManagerPersistService metaDataManagerService = mock(MetaDataManagerPersistService.class);
+        when(contextManager.getPersistServiceFacade().getModeFacade().getMetaDataManagerService()).thenReturn(metaDataManagerService);
+        ShardingSphereSQLException sqlException = mock(ShardingSphereSQLException.class);
+        doThrow(sqlException).when(validateHandler).validate(anyMap());
+        when(DatabaseTypeEngine.getProtocolType(anyMap(), any(ConfigurationProperties.class))).thenReturn(mock(DatabaseType.class));
+        assertThrows(ShardingSphereSQLException.class,
+                () -> executor.importDatabaseConfiguration("foo_db", Collections.singletonMap("foo_ds", mock(DataSourcePoolProperties.class)), Collections.emptyList()));
+        verify(metaDataManagerService).createDatabase("foo_db");
+        verify(metaDataManagerService).dropDatabase(database);
+    }
+    
+    @Test
+    void assertImportDatabaseConfigurationWhenUncheckedFailureOccurs() {
+        ShardingSphereDatabase database = mockDatabase(Collections.emptyMap(), Collections.emptyList());
+        mockMetaDataContexts(database, new ConfigurationProperties(new Properties()));
+        MetaDataManagerPersistService metaDataManagerService = mock(MetaDataManagerPersistService.class);
+        when(contextManager.getPersistServiceFacade().getModeFacade().getMetaDataManagerService()).thenReturn(metaDataManagerService);
+        doThrow(IllegalStateException.class).when(validateHandler).validate(anyMap());
+        when(DatabaseTypeEngine.getProtocolType(anyMap(), any(ConfigurationProperties.class))).thenReturn(mock(DatabaseType.class));
+        assertThrows(IllegalStateException.class,
+                () -> executor.importDatabaseConfiguration("foo_db", Collections.singletonMap("foo_ds", mock(DataSourcePoolProperties.class)), Collections.emptyList()));
+        verify(metaDataManagerService).createDatabase("foo_db");
+        verify(metaDataManagerService, never()).dropDatabase(database);
+    }
+    
+    private ShardingSphereDatabase mockDatabase(final Map<String, StorageUnit> storageUnits, final Collection<ShardingSphereRule> rules) {
+        ShardingSphereDatabase result = mock(ShardingSphereDatabase.class, RETURNS_DEEP_STUBS);
+        lenient().when(result.getName()).thenReturn("foo_db");
+        when(result.getResourceMetaData().getStorageUnits()).thenReturn(storageUnits);
+        when(result.getRuleMetaData().getRules()).thenReturn(rules);
+        return result;
+    }
+    
+    private void mockMetaDataContexts(final ShardingSphereDatabase database, final ConfigurationProperties props) {
+        MetaDataContexts metaDataContexts = mock(MetaDataContexts.class, RETURNS_DEEP_STUBS);
+        lenient().when(metaDataContexts.getMetaData().getDatabase("foo_db")).thenReturn(database);
+        lenient().when(metaDataContexts.getMetaData().getProps()).thenReturn(props);
+        lenient().when(metaDataContexts.getMetaData().getTemporaryProps()).thenReturn(new TemporaryConfigurationProperties(new Properties()));
+        lenient().when(contextManager.getMetaDataContexts()).thenReturn(metaDataContexts);
+    }
+}

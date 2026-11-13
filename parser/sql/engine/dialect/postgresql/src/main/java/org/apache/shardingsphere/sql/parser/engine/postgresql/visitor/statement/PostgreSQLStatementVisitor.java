@@ -1,0 +1,2286 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.sql.parser.engine.postgresql.visitor.statement;
+
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.misc.Interval;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.TerminalNode;
+import org.apache.shardingsphere.database.connector.core.metadata.database.enums.NullsOrderType;
+import org.apache.shardingsphere.database.connector.core.type.DatabaseType;
+import org.apache.shardingsphere.infra.exception.ShardingSpherePreconditions;
+import org.apache.shardingsphere.sql.parser.api.ASTNode;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.AExprContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.AexprConstContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.AliasClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.AliasContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.AnyNameContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.AscDescContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.AttrNameContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.AttrsContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.BExprContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.CExprContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.CaseExprContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.ColIdContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.ColumnNameContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.ColumnNamesContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.ColumnrefContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.CommonTableExprContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.ConstraintNameContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.DataTypeContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.DataTypeLengthContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.DataTypeNameContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.DeleteContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.ExecuteStmtContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.ExplicitRowContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.ExprListContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.ExtractArgContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.ForLockingClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.FromClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.FromListContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.FuncApplicationContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.FuncExprContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.FuncNameContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.FunctionExprCommonSubexprContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.GroupByItemContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.GroupClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.HavingClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.HostVariableContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.IdentifierContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.ImplicitRowContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.InExprContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.IndexNameContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.IndirectionContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.IndirectionElContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.InsertColumnItemContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.InsertColumnListContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.InsertContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.InsertRestContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.InsertTargetContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.IntoClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.JoinQualContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.JoinedTableContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.JsonAggregateFunctionContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.JsonExistsErrorClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.JsonFunctionContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.JsonNullClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.JsonPassingClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.JsonReturningClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.JsonTableColumnContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.JsonTableContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.JsonTablePathContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.JsonValueEmptyClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.JsonValueErrorClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.LimitClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.MergeContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.MergeMatchedThenClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.MergeWhenClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.NameContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.NameListContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.NaturalJoinTypeContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.NullsOrderContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.NumberLiteralsContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.OptIndirectionContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.OptOnConflictContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.OuterJoinTypeContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.OverClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.OwnerContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.ParameterMarkerContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.QualifiedNameContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.QualifiedNameListContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.RelationExprOptAliasContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.ReturningClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.ReturningOptionContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.RowsFromItemContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SchemaNameContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SelectClauseNContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SelectContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SelectFetchValueContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SelectLimitContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SelectLimitValueContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SelectNoParensContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SelectOffsetValueContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SelectWithParensContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SetClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SetClauseListContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SetTargetContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SetTargetListContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SignedIconstContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SimpleSelectContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SortClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.SortbyContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.TableFuncElementContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.TableNameContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.TableNamesContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.TableReferenceContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.TargetElContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.TargetListContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.TypeNameContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.UescapeContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.UnreservedWordContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.UpdateContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.ValuesClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.WhenClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.WhereClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.WhereOrCurrentClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.WindowClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.WindowDefinitionContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.WindowDefinitionListContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.WindowSpecificationContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.WithClauseContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.XmlNamespaceElContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.XmlTableColumnElContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.XmlTableColumnOptionElContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParser.XmlTableContext;
+import org.apache.shardingsphere.sql.parser.autogen.PostgreSQLStatementParserBaseVisitor;
+import org.apache.shardingsphere.sql.parser.engine.exception.SQLParsingException;
+import org.apache.shardingsphere.sql.parser.statement.core.enums.AggregationType;
+import org.apache.shardingsphere.sql.parser.statement.core.enums.CombineType;
+import org.apache.shardingsphere.sql.parser.statement.core.enums.JoinType;
+import org.apache.shardingsphere.sql.parser.statement.core.enums.OrderDirection;
+import org.apache.shardingsphere.sql.parser.statement.core.enums.ParameterMarkerType;
+import org.apache.shardingsphere.sql.parser.statement.core.enums.SubqueryType;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.ddl.constraint.ConstraintSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.ddl.index.IndexNameSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.ddl.index.IndexSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.ReturningSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.assignment.ColumnAssignmentSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.assignment.InsertValuesSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.assignment.SetAssignmentSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.column.ColumnSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.column.InsertColumnsSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.column.OnDuplicateKeyColumnsSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.combine.CombineSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.BetweenExpression;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.BinaryOperationExpression;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.CaseWhenExpression;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.CollateExpression;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.ExistsSubqueryExpression;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.ExpressionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.ExpressionWithParamsSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.ExtractArgExpression;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.FunctionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.InExpression;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.ListExpression;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.NotExpression;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.RowExpression;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.TypeCastExpression;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.UnaryOperationExpression;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.complex.CommonExpressionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.complex.CommonTableExpressionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.simple.LiteralExpressionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.simple.ParameterMarkerExpressionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.subquery.SubqueryExpressionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.subquery.SubquerySegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.AggregationDistinctProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.AggregationProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.ColumnProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.ExpressionProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.ProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.ProjectionsSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.ShorthandProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.SubqueryProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.merge.MergeWhenAndThenSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.order.GroupBySegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.order.OrderBySegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.order.item.ColumnOrderByItemSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.order.item.ExpressionOrderByItemSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.order.item.IndexOrderByItemSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.order.item.OrderByItemSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.pagination.limit.ExpressionLimitValueSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.pagination.limit.LimitSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.pagination.limit.LimitValueSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.pagination.limit.NumberLiteralLimitValueSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.pagination.limit.ParameterMarkerLimitValueSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.predicate.HavingSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.predicate.LockSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.predicate.WhereSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.xml.XmlNamespaceStringAsIdentifierSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.xml.XmlNamespacesClauseSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.xml.XmlTableColumnSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.xml.XmlTableFunctionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.xml.XmlTableOptionsSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.AliasAvailable;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.AliasSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.DataTypeLengthSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.DataTypeSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.NameSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.OwnerSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.ParameterMarkerSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.ParenthesesSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.WindowItemSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.WindowSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.WithSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.table.DeleteMultiTableSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.table.FunctionTableSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.table.JoinTableSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.table.SimpleTableSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.table.SubqueryTableSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.table.TableNameSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.generic.table.TableSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.statement.type.ddl.ExecuteStatement;
+import org.apache.shardingsphere.sql.parser.statement.core.statement.type.dml.DMLStatement;
+import org.apache.shardingsphere.sql.parser.statement.core.statement.type.dml.DeleteStatement;
+import org.apache.shardingsphere.sql.parser.statement.core.statement.type.dml.InsertStatement;
+import org.apache.shardingsphere.sql.parser.statement.core.statement.type.dml.MergeStatement;
+import org.apache.shardingsphere.sql.parser.statement.core.statement.type.dml.SelectStatement;
+import org.apache.shardingsphere.sql.parser.statement.core.statement.type.dml.UpdateStatement;
+import org.apache.shardingsphere.sql.parser.statement.core.util.SQLUtils;
+import org.apache.shardingsphere.sql.parser.statement.core.value.collection.CollectionValue;
+import org.apache.shardingsphere.sql.parser.statement.core.value.identifier.IdentifierValue;
+import org.apache.shardingsphere.sql.parser.statement.core.value.keyword.KeywordValue;
+import org.apache.shardingsphere.sql.parser.statement.core.value.literal.LiteralValue;
+import org.apache.shardingsphere.sql.parser.statement.core.value.literal.impl.BooleanLiteralValue;
+import org.apache.shardingsphere.sql.parser.statement.core.value.literal.impl.NullLiteralValue;
+import org.apache.shardingsphere.sql.parser.statement.core.value.literal.impl.NumberLiteralValue;
+import org.apache.shardingsphere.sql.parser.statement.core.value.literal.impl.OtherLiteralValue;
+import org.apache.shardingsphere.sql.parser.statement.core.value.literal.impl.StringLiteralValue;
+import org.apache.shardingsphere.sql.parser.statement.core.value.parametermarker.ParameterMarkerValue;
+
+import javax.annotation.Nullable;
+import java.math.BigInteger;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+/**
+ * Statement visitor for PostgreSQL.
+ */
+@RequiredArgsConstructor
+@Getter(AccessLevel.PROTECTED)
+public abstract class PostgreSQLStatementVisitor extends PostgreSQLStatementParserBaseVisitor<ASTNode> {
+    
+    private final DatabaseType databaseType;
+    
+    private final Collection<ParameterMarkerSegment> parameterMarkerSegments = new LinkedList<>();
+    
+    @Override
+    public final ASTNode visitParameterMarker(final ParameterMarkerContext ctx) {
+        return null == ctx.DOLLAR_()
+                ? new ParameterMarkerValue(parameterMarkerSegments.size(), ParameterMarkerType.QUESTION)
+                : new ParameterMarkerValue(new NumberLiteralValue(ctx.NUMBER_().getText()).getValue().intValue() - 1, ParameterMarkerType.DOLLAR);
+    }
+    
+    @Override
+    public final ASTNode visitNumberLiterals(final NumberLiteralsContext ctx) {
+        return new NumberLiteralValue(ctx.NUMBER_().getText().replace("_", ""));
+    }
+    
+    @Override
+    public final ASTNode visitIdentifier(final IdentifierContext ctx) {
+        UnreservedWordContext unreservedWord = ctx.unreservedWord();
+        return null == unreservedWord ? createIdentifierValue(ctx.getText()) : visit(unreservedWord);
+    }
+    
+    protected final IdentifierValue createIdentifierValue(final String text) {
+        boolean unicode = text.regionMatches(true, 0, "U&", 0, 2);
+        if (!unicode && !text.startsWith("\"")) {
+            return new IdentifierValue(text);
+        }
+        int stopIndex = text.lastIndexOf('"');
+        String value = text.substring(unicode ? 3 : 1, stopIndex).replace("\"\"", "\"");
+        if (unicode) {
+            char escape = stopIndex + 1 == text.length() ? '\\' : getUnicodeEscapeCharacter(text.substring(stopIndex + 8));
+            value = decodeUnicode(value, escape);
+        }
+        return IdentifierValue.fromDecodedQuotedName(value);
+    }
+    
+    private char getUnicodeEscapeCharacter(final String text) {
+        String literal = concatenateStringLiterals(text);
+        String value = literal.substring(1, literal.length() - 1);
+        if (!text.regionMatches(true, 0, "E", 0, 1) || '\\' != value.charAt(0)) {
+            return value.charAt(0);
+        }
+        char character = value.charAt(1);
+        if ('x' == character || 'u' == character || 'U' == character) {
+            return (char) Integer.parseInt(value.substring(2), 16);
+        }
+        if ('0' <= character && '7' >= character) {
+            return (char) Integer.parseInt(value.substring(1), 8);
+        }
+        return 'b' == character ? '\b' : character;
+    }
+    
+    private String concatenateStringLiterals(final String text) {
+        StringBuilder result = new StringBuilder("'");
+        boolean escaped = 'E' == text.charAt(0) || 'e' == text.charAt(0);
+        int index = text.indexOf('\'') + 1;
+        while (index < text.length()) {
+            char character = text.charAt(index);
+            if (escaped && '\\' == character) {
+                result.append(character).append(text.charAt(++index));
+            } else if ('\'' != character) {
+                result.append(character);
+            } else if (index + 1 < text.length() && '\'' == text.charAt(index + 1)) {
+                result.append("''");
+                index++;
+            } else {
+                int nextIndex = text.indexOf('\'', index + 1);
+                if (-1 == nextIndex) {
+                    break;
+                }
+                index = nextIndex;
+            }
+            index++;
+        }
+        return result.append('\'').toString();
+    }
+    
+    private String decodeUnicode(final String value, final char escape) {
+        StringBuilder result = new StringBuilder();
+        int index = 0;
+        while (index < value.length()) {
+            char character = value.charAt(index);
+            if (escape != character) {
+                result.append(character);
+                index++;
+            } else if (escape == value.charAt(index + 1)) {
+                result.append(escape);
+                index += 2;
+            } else {
+                int startIndex = index + 1;
+                int length = '+' == value.charAt(startIndex) ? 6 : 4;
+                startIndex += 6 == length ? 1 : 0;
+                result.appendCodePoint(Integer.parseInt(value.substring(startIndex, startIndex + length), 16));
+                index = startIndex + length;
+            }
+        }
+        return result.toString();
+    }
+    
+    @Override
+    public final ASTNode visitUnreservedWord(final UnreservedWordContext ctx) {
+        return new IdentifierValue(ctx.getText());
+    }
+    
+    @Override
+    public final ASTNode visitSchemaName(final SchemaNameContext ctx) {
+        return visit(ctx.identifier());
+    }
+    
+    @Override
+    public final ASTNode visitOwner(final OwnerContext ctx) {
+        return new OwnerSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), (IdentifierValue) visit(ctx.identifier()));
+    }
+    
+    @Override
+    public final ASTNode visitTableName(final TableNameContext ctx) {
+        SimpleTableSegment result = new SimpleTableSegment(new TableNameSegment(ctx.name().getStart().getStartIndex(), ctx.name().getStop().getStopIndex(), (IdentifierValue) visit(ctx.name())));
+        OwnerContext owner = ctx.owner();
+        if (null != owner) {
+            result.setOwner((OwnerSegment) visit(owner));
+        }
+        return result;
+    }
+    
+    @Override
+    public final ASTNode visitColumnName(final ColumnNameContext ctx) {
+        ColumnSegment result = new ColumnSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), (IdentifierValue) visit(ctx.name()));
+        OwnerContext owner = ctx.owner();
+        if (null != owner) {
+            result.setOwner((OwnerSegment) visit(owner));
+        }
+        return result;
+    }
+    
+    @Override
+    public final ASTNode visitIndexName(final IndexNameContext ctx) {
+        IndexNameSegment indexName = new IndexNameSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), (IdentifierValue) visit(ctx.identifier()));
+        return new IndexSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), indexName);
+    }
+    
+    @Override
+    public final ASTNode visitConstraintName(final ConstraintNameContext ctx) {
+        return new ConstraintSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), (IdentifierValue) visit(ctx.identifier()));
+    }
+    
+    @Override
+    public final ASTNode visitTableNames(final TableNamesContext ctx) {
+        CollectionValue<SimpleTableSegment> result = new CollectionValue<>();
+        for (TableNameContext each : ctx.tableName()) {
+            result.getValue().add((SimpleTableSegment) visit(each));
+        }
+        return result;
+    }
+    
+    @Override
+    public final ASTNode visitColumnNames(final ColumnNamesContext ctx) {
+        CollectionValue<ColumnSegment> result = new CollectionValue<>();
+        for (ColumnNameContext each : ctx.columnName()) {
+            result.getValue().add((ColumnSegment) visit(each));
+        }
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitAExpr(final AExprContext ctx) {
+        if (null != ctx.cExpr()) {
+            return visit(ctx.cExpr());
+        }
+        return createAExprSegment(ctx).orElseGet(() -> createCommonExpressionSegment(ctx));
+    }
+    
+    private Optional<ASTNode> createAExprSegment(final AExprContext ctx) {
+        if (null != ctx.TYPE_CAST_()) {
+            return Optional.of(new TypeCastExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), ctx.getText(), (ExpressionSegment) visit(ctx.aExpr(0)), ctx.typeName().getText()));
+        }
+        if (null != ctx.COLLATE()) {
+            LiteralExpressionSegment collateName = new LiteralExpressionSegment(ctx.anyName().start.getStartIndex(), ctx.anyName().stop.getStopIndex(), getOriginalText(ctx.anyName()));
+            return Optional.of(new CollateExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), collateName, (ExpressionSegment) visit(ctx.aExpr(0))));
+        }
+        if (null != ctx.BETWEEN()) {
+            return Optional.of(createBetweenSegment(ctx));
+        }
+        if (null != ctx.IN()) {
+            return Optional.of(createInSegment(ctx));
+        }
+        if (null != ctx.patternMatchingOperator()) {
+            return Optional.of(createPatternMatchingOperationSegment(ctx, ctx.patternMatchingOperator()));
+        }
+        if (null != ctx.qualOp() && null != ctx.qualOp().patternMatchingSymbol() && null != ctx.aExpr(1)) {
+            return Optional.of(createPatternMatchingOperationSegment(ctx, ctx.qualOp()));
+        }
+        if (null != ctx.subqueryOp() && (null != ctx.subqueryOp().LIKE() || null != ctx.subqueryOp().ILIKE())) {
+            return Optional.of(createQuantifiedPatternMatchingOperationSegment(ctx));
+        }
+        if (null != ctx.NOT() && null == ctx.IS() && 1 == ctx.aExpr().size()) {
+            return Optional.of(new NotExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), (ExpressionSegment) visit(ctx.aExpr(0)), false));
+        }
+        if (1 == ctx.aExpr().size() && (null != ctx.qualOp() || null != ctx.TILDE_())) {
+            String operator = null == ctx.qualOp() ? ctx.TILDE_().getText() : ctx.qualOp().getText();
+            return Optional.of(new UnaryOperationExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), (ExpressionSegment) visit(ctx.aExpr(0)), operator, getOriginalText(ctx)));
+        }
+        return findBinaryOperator(ctx).map(optional -> createBinaryOperationSegment(ctx, optional));
+    }
+    
+    private BinaryOperationExpression createQuantifiedPatternMatchingOperationSegment(final AExprContext ctx) {
+        ExpressionSegment left = (ExpressionSegment) visit(ctx.aExpr(0));
+        ExpressionSegment expression;
+        if (null != ctx.selectWithParens()) {
+            SelectWithParensContext select = ctx.selectWithParens();
+            expression = new SubqueryExpressionSegment(new SubquerySegment(select.start.getStartIndex(), select.stop.getStopIndex(), createSubquerySelectStatement(select), getOriginalText(select)));
+        } else {
+            expression = (ExpressionSegment) visit(ctx.aExpr(1));
+        }
+        ListExpression right = new ListExpression(expression.getStartIndex(), expression.getStopIndex());
+        right.getItems().add(expression);
+        String operator = getOriginalText(ctx.subqueryOp()).toUpperCase() + " " + ctx.subType().getText().toUpperCase();
+        return new BinaryOperationExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), left, right, operator, getOriginalText(ctx));
+    }
+    
+    private SelectStatement createSubquerySelectStatement(final ParserRuleContext ctx) {
+        int previousMarkerCount = parameterMarkerSegments.size();
+        SelectStatement result = (SelectStatement) visit(ctx);
+        int markerCount = parameterMarkerSegments.size() - previousMarkerCount;
+        Deque<ParameterMarkerSegment> markers = new ArrayDeque<>(markerCount);
+        Iterator<ParameterMarkerSegment> iterator = ((Deque<ParameterMarkerSegment>) parameterMarkerSegments).descendingIterator();
+        for (int i = markerCount; i > 0; i--) {
+            markers.addFirst(iterator.next());
+        }
+        result.addParameterMarkers(markers);
+        return result;
+    }
+    
+    private Optional<String> findBinaryOperator(final AExprContext ctx) {
+        if (null != ctx.IS()) {
+            if (null != ctx.DISTINCT()) {
+                return Optional.of(null == ctx.NOT() ? "IS DISTINCT FROM" : "IS NOT DISTINCT FROM");
+            }
+            return Optional.of(ctx.IS().getText());
+        }
+        if (null != ctx.ISNULL()) {
+            return Optional.of("IS");
+        }
+        if (1 == ctx.aExpr().size()) {
+            return Optional.empty();
+        }
+        if (null != ctx.comparisonOperator()) {
+            return Optional.of(ctx.comparisonOperator().getText());
+        }
+        if (null != ctx.andOperator()) {
+            return Optional.of(ctx.andOperator().getText());
+        }
+        if (null != ctx.orOperator()) {
+            return Optional.of(ctx.orOperator().getText());
+        }
+        if (null != ctx.PLUS_()) {
+            return Optional.of(ctx.PLUS_().getText());
+        }
+        if (null != ctx.MINUS_()) {
+            return Optional.of(ctx.MINUS_().getText());
+        }
+        if (null != ctx.ASTERISK_()) {
+            return Optional.of(ctx.ASTERISK_().getText());
+        }
+        if (null != ctx.SLASH_()) {
+            return Optional.of(ctx.SLASH_().getText());
+        }
+        if (null != ctx.qualOp() && (null != ctx.qualOp().CUSTOM_OPERATOR_() || null != ctx.qualOp().OPERATOR() || null != ctx.qualOp().SAFE_EQ_() || null != ctx.qualOp().BQ_()
+                || null != ctx.qualOp().AND_())) {
+            return Optional.of(ctx.qualOp().getText());
+        }
+        return Optional.empty();
+    }
+    
+    private BinaryOperationExpression createPatternMatchingOperationSegment(final AExprContext ctx, final ParserRuleContext operatorContext) {
+        String operator = getOriginalText(operatorContext).toUpperCase();
+        ExpressionSegment left = (ExpressionSegment) visit(ctx.aExpr(0));
+        ListExpression right = new ListExpression(ctx.aExpr(1).start.getStartIndex(), ctx.aExpr().get(ctx.aExpr().size() - 1).stop.getStopIndex());
+        for (int i = 1; i < ctx.aExpr().size(); i++) {
+            right.getItems().add((ExpressionSegment) visit(ctx.aExpr().get(i)));
+        }
+        String text = ctx.start.getInputStream().getText(new Interval(ctx.start.getStartIndex(), ctx.stop.getStopIndex()));
+        return new BinaryOperationExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), left, right, operator, text);
+    }
+    
+    private BinaryOperationExpression createBinaryOperationSegment(final AExprContext ctx, final String operator) {
+        if ("IS".equalsIgnoreCase(operator)) {
+            ExpressionSegment left = (ExpressionSegment) visit(ctx.aExpr(0));
+            String rightText;
+            ExpressionSegment right;
+            if (null != ctx.IS()) {
+                rightText = ctx.start.getInputStream().getText(new Interval(ctx.IS().getSymbol().getStopIndex() + 2, ctx.stop.getStopIndex())).trim();
+                right = new LiteralExpressionSegment(ctx.IS().getSymbol().getStopIndex() + 2, ctx.stop.getStopIndex(), rightText);
+            } else {
+                rightText = ctx.start.getInputStream().getText(new Interval(ctx.ISNULL().getSymbol().getStartIndex() + 2, ctx.stop.getStopIndex())).trim();
+                right = new LiteralExpressionSegment(ctx.ISNULL().getSymbol().getStartIndex() + 2, ctx.stop.getStopIndex(), rightText);
+            }
+            return new BinaryOperationExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), left, right, "IS",
+                    ctx.start.getInputStream().getText(new Interval(ctx.start.getStartIndex(), ctx.stop.getStopIndex())));
+        }
+        ExpressionSegment left = (ExpressionSegment) visit(ctx.aExpr(0));
+        ExpressionSegment right = (ExpressionSegment) visit(ctx.aExpr(1));
+        String text = ctx.start.getInputStream().getText(new Interval(ctx.start.getStartIndex(), ctx.stop.getStopIndex()));
+        return new BinaryOperationExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), left, right, operator, text);
+    }
+    
+    @Override
+    public ASTNode visitCExpr(final CExprContext ctx) {
+        if (null != ctx.columnref()) {
+            return visit(ctx.columnref());
+        }
+        if (null != ctx.parameterMarker()) {
+            ParameterMarkerValue parameterMarker = (ParameterMarkerValue) visit(ctx.parameterMarker());
+            ParameterMarkerExpressionSegment result = new ParameterMarkerExpressionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), parameterMarker.getValue(), parameterMarker.getType());
+            parameterMarkerSegments.add(result);
+            return result;
+        }
+        if (null != ctx.aexprConst()) {
+            return visit(ctx.aexprConst());
+        }
+        if (null != ctx.aExpr()) {
+            ASTNode result = visit(ctx.aExpr());
+            if (null != ctx.optIndirection().indirectionEl()) {
+                Collection<ExpressionSegment> children = new LinkedList<>();
+                children.add((ExpressionSegment) result);
+                collectFunctionParameters(ctx.optIndirection(), children);
+                return new CommonExpressionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(ctx), children);
+            }
+            if (result instanceof ColumnSegment) {
+                ((ColumnSegment) result).setLeftParentheses(new ParenthesesSegment(ctx.LP_().getSymbol().getStartIndex(), ctx.LP_().getSymbol().getStopIndex(), ctx.LP_().getSymbol().getText()));
+                ((ColumnSegment) result).setRightParentheses(new ParenthesesSegment(ctx.RP_().getSymbol().getStartIndex(), ctx.RP_().getSymbol().getStopIndex(), ctx.RP_().getSymbol().getText()));
+            }
+            return result;
+        }
+        if (null != ctx.funcExpr()) {
+            return visit(ctx.funcExpr());
+        }
+        if (null != ctx.selectWithParens()) {
+            ExpressionSegment result = createSubqueryExpressionSegment(ctx);
+            if (null != ctx.indirection()) {
+                Collection<ExpressionSegment> children = new LinkedList<>();
+                children.add(result);
+                collectFunctionParameters(ctx.indirection(), children);
+                return new CommonExpressionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(ctx), children);
+            }
+            return result;
+        }
+        if (null != ctx.caseExpr()) {
+            return visit(ctx.caseExpr());
+        }
+        if (null != ctx.explicitRow()) {
+            return visit(ctx.explicitRow());
+        }
+        if (null != ctx.implicitRow()) {
+            return visit(ctx.implicitRow());
+        }
+        return createCommonExpressionSegment(ctx);
+    }
+    
+    private CommonExpressionSegment createCommonExpressionSegment(final ParserRuleContext ctx) {
+        Collection<ExpressionSegment> children = new LinkedList<>();
+        collectFunctionParameters(ctx, children, true);
+        return new CommonExpressionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(ctx), children);
+    }
+    
+    @SuppressWarnings("unchecked")
+    @Override
+    public ASTNode visitExplicitRow(final ExplicitRowContext ctx) {
+        RowExpression result = new RowExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(ctx));
+        if (null != ctx.exprList()) {
+            result.getItems().addAll(((CollectionValue<ExpressionSegment>) visit(ctx.exprList())).getValue());
+        }
+        return result;
+    }
+    
+    @SuppressWarnings("unchecked")
+    @Override
+    public ASTNode visitImplicitRow(final ImplicitRowContext ctx) {
+        RowExpression result = new RowExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(ctx));
+        result.getItems().addAll(((CollectionValue<ExpressionSegment>) visit(ctx.exprList())).getValue());
+        result.getItems().add((ExpressionSegment) visit(ctx.aExpr()));
+        return result;
+    }
+    
+    private ExpressionSegment createSubqueryExpressionSegment(final CExprContext ctx) {
+        SubquerySegment subquerySegment = new SubquerySegment(ctx.selectWithParens().getStart().getStartIndex(),
+                ctx.selectWithParens().getStop().getStopIndex(),
+                (SelectStatement) visit(ctx.selectWithParens()), getOriginalText(ctx.selectWithParens()));
+        if (null != ctx.EXISTS()) {
+            subquerySegment.setSelect(subquerySegment.getSelect().withSubqueryType(SubqueryType.EXISTS));
+            return new ExistsSubqueryExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), subquerySegment);
+        }
+        return new SubqueryExpressionSegment(subquerySegment);
+    }
+    
+    @Override
+    public ASTNode visitCaseExpr(final CaseExprContext ctx) {
+        ExpressionSegment caseExpr = null == ctx.caseArg() ? null : (ExpressionSegment) visit(ctx.caseArg().aExpr());
+        Collection<ExpressionSegment> whenExprs = new LinkedList<>();
+        Collection<ExpressionSegment> thenExprs = new LinkedList<>();
+        for (WhenClauseContext each : ctx.whenClauseList().whenClause()) {
+            whenExprs.add((ExpressionSegment) visit(each.aExpr(0)));
+            thenExprs.add((ExpressionSegment) visit(each.aExpr(1)));
+        }
+        ExpressionSegment elseExpr = null == ctx.caseDefault() ? null : (ExpressionSegment) visit(ctx.caseDefault().aExpr());
+        return new CaseWhenExpression(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), caseExpr, whenExprs, thenExprs, elseExpr, getOriginalText(ctx));
+    }
+    
+    @Override
+    public ASTNode visitFuncExpr(final FuncExprContext ctx) {
+        if (null != ctx.functionExprCommonSubexpr()) {
+            return visit(ctx.functionExprCommonSubexpr());
+        }
+        ShardingSpherePreconditions.checkState(null == ctx.filterClause(), () -> new SQLParsingException("FILTER clauses are not supported"));
+        ASTNode result = visit(null == ctx.jsonAggregateFunction() ? ctx.funcApplication() : ctx.jsonAggregateFunction());
+        return null == ctx.overClause() ? result : appendWindow(ctx, result);
+    }
+    
+    private ASTNode appendWindow(final FuncExprContext ctx, final ASTNode node) {
+        WindowItemSegment window = (WindowItemSegment) visit(ctx.overClause());
+        if (node instanceof AggregationDistinctProjectionSegment) {
+            return createAggregationDistinctSegmentWithWindow(ctx, (AggregationDistinctProjectionSegment) node, window);
+        }
+        if (node instanceof AggregationProjectionSegment) {
+            return createAggregationSegmentWithWindow(ctx, (AggregationProjectionSegment) node, window);
+        }
+        if (node instanceof FunctionSegment) {
+            return createFunctionSegment(ctx, (FunctionSegment) node, window);
+        }
+        return node;
+    }
+    
+    private AggregationDistinctProjectionSegment createAggregationDistinctSegmentWithWindow(final FuncExprContext ctx, final AggregationDistinctProjectionSegment segment,
+                                                                                            final WindowItemSegment window) {
+        AggregationDistinctProjectionSegment result = new AggregationDistinctProjectionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), segment.getType(), getOriginalText(ctx),
+                segment.getDistinctInnerExpression(), segment.getSeparator().orElse(null));
+        result.getParameters().addAll(segment.getParameters());
+        result.setWindow(window);
+        return result;
+    }
+    
+    private AggregationProjectionSegment createAggregationSegmentWithWindow(final FuncExprContext ctx, final AggregationProjectionSegment segment, final WindowItemSegment window) {
+        AggregationProjectionSegment result = new AggregationProjectionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), segment.getType(), getOriginalText(ctx),
+                segment.getSeparator().orElse(null));
+        result.getParameters().addAll(segment.getParameters());
+        result.setWindow(window);
+        return result;
+    }
+    
+    private FunctionSegment createFunctionSegment(final FuncExprContext ctx, final FunctionSegment segment, final WindowItemSegment window) {
+        FunctionSegment result = new FunctionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), segment.getFunctionName(), getOriginalText(ctx));
+        result.setOwner(segment.getOwner());
+        result.getParameters().addAll(segment.getParameters());
+        result.setWindow(window);
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitOverClause(final OverClauseContext ctx) {
+        if (null != ctx.windowSpecification()) {
+            return createWindowItem(ctx.windowSpecification());
+        }
+        WindowItemSegment result = new WindowItemSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex());
+        result.setWindowName(createIdentifierValue(ctx.colId().getText()));
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitFunctionExprCommonSubexpr(final FunctionExprCommonSubexprContext ctx) {
+        if (null != ctx.jsonFunction()) {
+            return visit(ctx.jsonFunction());
+        }
+        if (null != ctx.CAST()) {
+            return new TypeCastExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), ctx.getText(), (ExpressionSegment) visit(ctx.aExpr(0)), ctx.typeName().getText());
+        }
+        FunctionSegment result = new FunctionSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), ctx.getChild(0).getText(), getOriginalText(ctx));
+        if ("EXTRACT".equalsIgnoreCase(ctx.getChild(0).getText())) {
+            result.getParameters().add((ExpressionSegment) visit(getTargetRuleContextFromParseTree(ctx, ExtractArgContext.class).iterator().next()));
+        }
+        collectFunctionParameters(ctx, result.getParameters());
+        return result;
+    }
+    
+    private void collectFunctionParameters(final ParseTree parseTree, final Collection<ExpressionSegment> params) {
+        collectFunctionParameters(parseTree, params, false);
+    }
+    
+    private void collectFunctionParameters(final ParseTree parseTree, final Collection<ExpressionSegment> params, final boolean expandOpaque) {
+        for (int index = 0; index < parseTree.getChildCount(); index++) {
+            ParseTree child = parseTree.getChild(index);
+            if (expandOpaque && child instanceof AExprContext) {
+                collectCommonAExprParameters((AExprContext) child, params);
+            } else if (child instanceof AExprContext || child instanceof BExprContext || child instanceof CExprContext || child instanceof JsonTablePathContext) {
+                ExpressionSegment expression = (ExpressionSegment) visit(child);
+                if (expandOpaque) {
+                    collectCommonExpressionChild(expression, params);
+                } else {
+                    params.add(expression);
+                }
+            } else if (child instanceof SelectNoParensContext) {
+                SelectNoParensContext select = (SelectNoParensContext) child;
+                SelectStatement statement = createSubquerySelectStatement(select);
+                params.add(new SubqueryExpressionSegment(new SubquerySegment(select.start.getStartIndex(), select.stop.getStopIndex(), statement, getOriginalText(select))));
+            } else if (parseTree instanceof JsonFunctionContext && (child instanceof TypeNameContext || child instanceof JsonValueEmptyClauseContext || child instanceof JsonValueErrorClauseContext
+                    || child instanceof JsonExistsErrorClauseContext || child instanceof JsonPassingClauseContext || child instanceof JsonNullClauseContext
+                    || child instanceof JsonReturningClauseContext)) {
+                ParserRuleContext parameter = (ParserRuleContext) child;
+                params.add(new CommonExpressionSegment(parameter.start.getStartIndex(), parameter.stop.getStopIndex(), getOriginalText(parameter), Collections.emptyList()));
+                if (!(child instanceof TypeNameContext)) {
+                    collectFunctionParameters(child, params, expandOpaque);
+                }
+            } else if (!(child instanceof TypeNameContext)) {
+                collectFunctionParameters(child, params, expandOpaque);
+            }
+        }
+    }
+    
+    private void collectCommonAExprParameters(final AExprContext ctx, final Collection<ExpressionSegment> params) {
+        if (null != ctx.cExpr()) {
+            collectCommonExpressionChild((ExpressionSegment) visit(ctx.cExpr()), params);
+            return;
+        }
+        Optional<ASTNode> expression = createAExprSegment(ctx);
+        if (expression.isPresent()) {
+            collectCommonExpressionChild((ExpressionSegment) expression.get(), params);
+        } else {
+            collectFunctionParameters(ctx, params, true);
+        }
+    }
+    
+    private void collectCommonExpressionChild(final ExpressionSegment expression, final Collection<ExpressionSegment> params) {
+        if (expression instanceof CommonExpressionSegment && !((CommonExpressionSegment) expression).getChildren().isEmpty()) {
+            params.addAll(((CommonExpressionSegment) expression).getChildren());
+        } else {
+            params.add(expression);
+        }
+    }
+    
+    @Override
+    public ASTNode visitJsonFunction(final JsonFunctionContext ctx) {
+        return createJsonFunction(ctx);
+    }
+    
+    private FunctionSegment createJsonFunction(final ParserRuleContext ctx) {
+        FunctionSegment result = new FunctionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), ctx.getChild(0).getText(), getOriginalText(ctx));
+        collectFunctionParameters(ctx, result.getParameters());
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitJsonAggregateFunction(final JsonAggregateFunctionContext ctx) {
+        return createJsonFunction(ctx);
+    }
+    
+    @Override
+    public ASTNode visitExtractArg(final ExtractArgContext ctx) {
+        return new ExtractArgExpression(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), ctx.getChild(0).getText());
+    }
+    
+    private <T extends ParseTree> Collection<T> getTargetRuleContextFromParseTree(final ParseTree parseTree, final Class<? extends T> clazz) {
+        Collection<T> result = new LinkedList<>();
+        for (int index = 0; index < parseTree.getChildCount(); index++) {
+            ParseTree child = parseTree.getChild(index);
+            if (clazz.isInstance(child)) {
+                result.add(clazz.cast(child));
+            } else {
+                result.addAll(getTargetRuleContextFromParseTree(child, clazz));
+            }
+        }
+        return result;
+    }
+    
+    private Collection<ExpressionSegment> getExpressionSegments(final Collection<AExprContext> aExprContexts) {
+        Collection<ExpressionSegment> result = new LinkedList<>();
+        for (AExprContext each : aExprContexts) {
+            result.add((ExpressionSegment) visit(each));
+        }
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitAexprConst(final AexprConstContext ctx) {
+        LiteralValue<?> value;
+        if (null != ctx.numberConst()) {
+            value = createNumberLiteralValue(ctx.numberConst().getText());
+        } else if (null != ctx.STRING_()) {
+            value = createStringLiteralValue(ctx.STRING_().getText(), null != ctx.UNICODE_ESCAPE(), ctx.uescape());
+        } else if (null != ctx.FALSE()) {
+            value = new BooleanLiteralValue(ctx.FALSE().getText());
+        } else if (null != ctx.TRUE()) {
+            value = new BooleanLiteralValue(ctx.TRUE().getText());
+        } else if (null != ctx.NULL()) {
+            value = new NullLiteralValue(ctx.getText());
+        } else {
+            value = new OtherLiteralValue(ctx.getText());
+        }
+        if (null != ctx.INTERVAL() || null != ctx.constTypeName() || null != ctx.funcName() && null == ctx.LP_()) {
+            LiteralExpressionSegment expression = new LiteralExpressionSegment(ctx.STRING_().getSymbol().getStartIndex(), ctx.STRING_().getSymbol().getStopIndex(), value.getValue().toString());
+            String dataType;
+            if (null != ctx.INTERVAL()) {
+                dataType = ctx.INTERVAL().getText();
+            } else {
+                dataType = null == ctx.constTypeName() ? ctx.funcName().getText() : ctx.constTypeName().getText();
+            }
+            return new TypeCastExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), ctx.getText(), expression, dataType);
+        }
+        return SQLUtils.createLiteralExpression(value, ctx.start.getStartIndex(), ctx.stop.getStopIndex(), ctx.getText());
+    }
+    
+    private NumberLiteralValue createNumberLiteralValue(final String text) {
+        String value = text.replace("_", "");
+        int startIndex = value.startsWith("-") || value.startsWith("+") ? 1 : 0;
+        int radix = 10;
+        if (value.regionMatches(true, startIndex, "0x", 0, 2)) {
+            radix = 16;
+        } else if (value.regionMatches(true, startIndex, "0o", 0, 2)) {
+            radix = 8;
+        } else if (value.regionMatches(true, startIndex, "0b", 0, 2)) {
+            radix = 2;
+        }
+        if (10 == radix) {
+            return new NumberLiteralValue(value);
+        }
+        BigInteger number = new BigInteger(value.substring(startIndex + 2), radix);
+        return new NumberLiteralValue((value.startsWith("-") ? number.negate() : number).toString());
+    }
+    
+    private StringLiteralValue createStringLiteralValue(final String literal, final boolean unicode, final UescapeContext uescape) {
+        String text = concatenateStringLiterals(literal);
+        if (unicode) {
+            char escape = null == uescape ? '\\' : getUnicodeEscapeCharacter(uescape.STRING_().getText());
+            text = "'" + decodeUnicode(text.substring(1, text.length() - 1), escape) + "'";
+        }
+        return new StringLiteralValue(text);
+    }
+    
+    @Override
+    public ASTNode visitColumnref(final ColumnrefContext ctx) {
+        if (null != ctx.indirection()) {
+            Collection<IndirectionElContext> elements = getTargetRuleContextFromParseTree(ctx.indirection(), IndirectionElContext.class);
+            if (elements.stream().anyMatch(each -> null != each.LBT_())) {
+                Collection<ExpressionSegment> children = new LinkedList<>();
+                children.add(createSubscriptColumn(ctx, elements));
+                collectFunctionParameters(ctx.indirection(), children);
+                return new CommonExpressionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(ctx), children);
+            }
+        }
+        if (null != ctx.indirection() && null != ctx.indirection().indirectionEl().DOT_ASTERISK_()) {
+            ColumnSegment result = new ColumnSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), new IdentifierValue("*"));
+            result.setOwner(new OwnerSegment(ctx.colId().start.getStartIndex(), ctx.colId().stop.getStopIndex(), createIdentifierValue(ctx.colId().getText())));
+            return result;
+        }
+        if (null != ctx.indirection() && null != ctx.indirection().indirectionEl().attrName()) {
+            AttrNameContext attrName = ctx.indirection().indirectionEl().attrName();
+            ColumnSegment result = new ColumnSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), createIdentifierValue(attrName.getText()));
+            OwnerSegment owner = new OwnerSegment(ctx.colId().start.getStartIndex(), ctx.colId().stop.getStopIndex(), createIdentifierValue(ctx.colId().getText()));
+            result.setOwner(owner);
+            return result;
+        }
+        return new ColumnSegment(ctx.colId().start.getStartIndex(), ctx.colId().stop.getStopIndex(), createIdentifierValue(ctx.colId().getText()));
+    }
+    
+    private ColumnSegment createSubscriptColumn(final ColumnrefContext ctx, final Collection<IndirectionElContext> elements) {
+        AttrNameContext columnName = null;
+        for (IndirectionElContext each : elements) {
+            if (null != each.LBT_()) {
+                break;
+            }
+            if (null != each.attrName()) {
+                columnName = each.attrName();
+            }
+        }
+        if (null == columnName) {
+            return new ColumnSegment(ctx.colId().start.getStartIndex(), ctx.colId().stop.getStopIndex(), createIdentifierValue(ctx.colId().getText()));
+        }
+        ColumnSegment result = new ColumnSegment(ctx.start.getStartIndex(), columnName.stop.getStopIndex(), createIdentifierValue(columnName.getText()));
+        result.setOwner(new OwnerSegment(ctx.colId().start.getStartIndex(), ctx.colId().stop.getStopIndex(), createIdentifierValue(ctx.colId().getText())));
+        return result;
+    }
+    
+    private InExpression createInSegment(final AExprContext ctx) {
+        ExpressionSegment left = (ExpressionSegment) visit(ctx.aExpr(0));
+        ExpressionSegment right = createInExpressionSegment(ctx.inExpr());
+        boolean not = null != ctx.NOT();
+        return new InExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), left, right, not);
+    }
+    
+    @SuppressWarnings("unchecked")
+    private ExpressionSegment createInExpressionSegment(final InExprContext ctx) {
+        if (null != ctx.selectWithParens()) {
+            SelectStatement select = (SelectStatement) visit(ctx.selectWithParens());
+            SubquerySegment subquerySegment = new SubquerySegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), select, getOriginalText(ctx.selectWithParens()));
+            return new SubqueryExpressionSegment(subquerySegment);
+        }
+        ListExpression result = new ListExpression(ctx.LP_().getSymbol().getStartIndex(), ctx.RP_().getSymbol().getStopIndex());
+        result.getItems().addAll(((CollectionValue<ExpressionSegment>) visit(ctx.exprList())).getValue());
+        return result;
+    }
+    
+    @SuppressWarnings("unchecked")
+    @Override
+    public ASTNode visitExprList(final ExprListContext ctx) {
+        CollectionValue<ExpressionSegment> result = new CollectionValue<>();
+        if (null != ctx.exprList()) {
+            result.combine((CollectionValue<ExpressionSegment>) visitExprList(ctx.exprList()));
+        }
+        result.getValue().add((ExpressionSegment) visit(ctx.aExpr()));
+        return result;
+    }
+    
+    private BetweenExpression createBetweenSegment(final AExprContext ctx) {
+        ExpressionSegment left = (ExpressionSegment) visit(ctx.aExpr(0));
+        ExpressionSegment between = (ExpressionSegment) visit(ctx.bExpr());
+        ExpressionSegment and = (ExpressionSegment) visit(ctx.aExpr(1));
+        boolean not = null != ctx.NOT();
+        return new BetweenExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), left, between, and, not);
+    }
+    
+    @Override
+    public ASTNode visitBExpr(final BExprContext ctx) {
+        if (null != ctx.cExpr()) {
+            return visit(ctx.cExpr());
+        }
+        if (null != ctx.TYPE_CAST_()) {
+            return new TypeCastExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), ctx.getText(), (ExpressionSegment) visit(ctx.bExpr(0)), ctx.typeName().getText());
+        }
+        if (null != ctx.TILDE_()) {
+            return new UnaryOperationExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), (ExpressionSegment) visit(ctx.bExpr(0)), ctx.TILDE_().getText(), getOriginalText(ctx));
+        }
+        if (2 == ctx.bExpr().size() && (null != ctx.CARET_() || null != ctx.ASTERISK_() || null != ctx.SLASH_() || null != ctx.MOD_() || null != ctx.PLUS_() || null != ctx.MINUS_())) {
+            ExpressionSegment left = (ExpressionSegment) visit(ctx.bExpr(0));
+            ExpressionSegment right = (ExpressionSegment) visit(ctx.bExpr(1));
+            return new BinaryOperationExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), left, right, ctx.getChild(1).getText(), getOriginalText(ctx));
+        }
+        if (null != ctx.qualOp()) {
+            if (1 == ctx.bExpr().size()) {
+                return new UnaryOperationExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), (ExpressionSegment) visit(ctx.bExpr(0)), ctx.qualOp().getText(), getOriginalText(ctx));
+            }
+            ExpressionSegment left = (ExpressionSegment) visit(ctx.bExpr(0));
+            ExpressionSegment right = (ExpressionSegment) visit(ctx.bExpr(1));
+            String operator = ctx.qualOp().getText();
+            String text = ctx.start.getInputStream().getText(new Interval(ctx.start.getStartIndex(), ctx.stop.getStopIndex()));
+            return new BinaryOperationExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), left, right, operator, text);
+        }
+        if (null != ctx.DISTINCT()) {
+            String operator = null == ctx.NOT() ? "IS DISTINCT FROM" : "IS NOT DISTINCT FROM";
+            return new BinaryOperationExpression(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), (ExpressionSegment) visit(ctx.bExpr(0)),
+                    (ExpressionSegment) visit(ctx.bExpr(1)), operator, getOriginalText(ctx));
+        }
+        List<ExpressionSegment> children = ctx.bExpr().stream().map(each -> (ExpressionSegment) visit(each)).collect(Collectors.toList());
+        if (1 == children.size() && children.get(0) instanceof LiteralExpressionSegment && (null != ctx.PLUS_() || null != ctx.MINUS_())) {
+            return new LiteralExpressionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), ctx.getText());
+        }
+        return new CommonExpressionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(ctx), children);
+    }
+    
+    private ProjectionSegment createAggregationSegment(final FuncApplicationContext ctx, final String aggregationType, final Collection<ExpressionSegment> expressionSegments) {
+        AggregationType type = AggregationType.valueOf(aggregationType.toUpperCase());
+        if (null == ctx.DISTINCT()) {
+            AggregationProjectionSegment result = new AggregationProjectionSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), type, getOriginalText(ctx));
+            result.getParameters().addAll(expressionSegments);
+            return result;
+        }
+        AggregationDistinctProjectionSegment result =
+                new AggregationDistinctProjectionSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), type, getOriginalText(ctx), getDistinctExpression(ctx));
+        result.getParameters().addAll(expressionSegments);
+        return result;
+    }
+    
+    private String getDistinctExpression(final FuncApplicationContext ctx) {
+        StringBuilder result = new StringBuilder();
+        result.append(ctx.funcArgList().getText());
+        if (null != ctx.sortClause()) {
+            result.append(ctx.sortClause().getText());
+        }
+        return result.toString();
+    }
+    
+    @Override
+    public final ASTNode visitDataTypeName(final DataTypeNameContext ctx) {
+        return new KeywordValue(null != ctx.numericTypeName() && null != ctx.numericTypeName().DOUBLE()
+                ? String.join(" ", ctx.numericTypeName().DOUBLE().getText(), ctx.numericTypeName().PRECISION().getText())
+                : ctx.getChild(0).getText());
+    }
+    
+    @Override
+    public final ASTNode visitSortClause(final SortClauseContext ctx) {
+        return new OrderBySegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(),
+                ctx.sortbyList().sortby().stream().map(each -> (OrderByItemSegment) visit(each)).collect(Collectors.toList()));
+    }
+    
+    @Override
+    public final ASTNode visitSortby(final SortbyContext ctx) {
+        OrderDirection orderDirection = null == ctx.ascDesc() ? OrderDirection.ASC : generateOrderDirection(ctx.ascDesc());
+        NullsOrderType nullsOrderType = generateNullsOrderType(ctx.nullsOrder());
+        ASTNode expr = visit(ctx.aExpr());
+        if (expr instanceof ColumnSegment) {
+            ColumnSegment column = (ColumnSegment) expr;
+            return new ColumnOrderByItemSegment(column, orderDirection, nullsOrderType);
+        }
+        if (expr instanceof LiteralExpressionSegment && !((LiteralExpressionSegment) expr).isNullLiteral()) {
+            LiteralExpressionSegment index = (LiteralExpressionSegment) expr;
+            return new IndexOrderByItemSegment(index.getStartIndex(), index.getStopIndex(), Integer.parseInt(index.getLiterals().toString()), orderDirection, nullsOrderType);
+        }
+        if (expr instanceof ExpressionSegment) {
+            return new ExpressionOrderByItemSegment(ctx.aExpr().getStart().getStartIndex(),
+                    ctx.aExpr().getStop().getStopIndex(), getOriginalText(ctx.aExpr()), orderDirection, nullsOrderType, (ExpressionSegment) expr);
+        }
+        return new ExpressionOrderByItemSegment(ctx.aExpr().getStart().getStartIndex(), ctx.aExpr().getStop().getStopIndex(), getOriginalText(ctx.aExpr()), orderDirection, nullsOrderType);
+    }
+    
+    private NullsOrderType generateNullsOrderType(final NullsOrderContext ctx) {
+        if (null == ctx) {
+            return null;
+        }
+        return null == ctx.FIRST() ? NullsOrderType.LAST : NullsOrderType.FIRST;
+    }
+    
+    private OrderDirection generateOrderDirection(final AscDescContext ctx) {
+        return null == ctx.DESC() ? OrderDirection.ASC : OrderDirection.DESC;
+    }
+    
+    @Override
+    public final ASTNode visitDataType(final DataTypeContext ctx) {
+        DataTypeSegment result = new DataTypeSegment();
+        result.setDataTypeName(((KeywordValue) visit(ctx.dataTypeName())).getValue());
+        result.setStartIndex(ctx.start.getStartIndex());
+        result.setStopIndex(ctx.stop.getStopIndex());
+        if (null != ctx.dataTypeLength()) {
+            result.setDataLength((DataTypeLengthSegment) visit(ctx.dataTypeLength()));
+        }
+        return result;
+    }
+    
+    @Override
+    public final ASTNode visitDataTypeLength(final DataTypeLengthContext ctx) {
+        DataTypeLengthSegment result = new DataTypeLengthSegment();
+        result.setStartIndex(ctx.start.getStartIndex());
+        result.setStopIndex(ctx.stop.getStartIndex());
+        List<TerminalNode> numbers = ctx.NUMBER_();
+        if (1 == numbers.size()) {
+            result.setPrecision(Integer.parseInt(numbers.get(0).getText().replace("_", "")));
+        }
+        if (2 == numbers.size()) {
+            result.setPrecision(Integer.parseInt(numbers.get(0).getText().replace("_", "")));
+            result.setScale(Integer.parseInt(numbers.get(1).getText().replace("_", "")));
+        }
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitInsert(final InsertContext ctx) {
+        WithSegment with = null == ctx.withClause() ? null : (WithSegment) visit(ctx.withClause());
+        InsertStatement insertStatement = (InsertStatement) visit(ctx.insertRest());
+        InsertStatement.InsertStatementBuilder result = InsertStatement.builder()
+                .databaseType(insertStatement.getDatabaseType())
+                .with(with)
+                .table((SimpleTableSegment) visit(ctx.insertTarget()))
+                .insertColumns(insertStatement.getInsertColumns().orElse(null))
+                .insertSelect(insertStatement.getInsertSelect().orElse(null))
+                .values(insertStatement.getValues());
+        if (null != ctx.optOnConflict()) {
+            result.onDuplicateKeyColumns((OnDuplicateKeyColumnsSegment) visit(ctx.optOnConflict()));
+        }
+        if (null != ctx.returningClause()) {
+            result.returning((ReturningSegment) visit(ctx.returningClause()));
+        }
+        InsertStatement actual = result.build();
+        actual.addParameterMarkers(getParameterMarkerSegments());
+        return actual;
+    }
+    
+    @Override
+    public ASTNode visitOptOnConflict(final OptOnConflictContext ctx) {
+        Collection<ColumnAssignmentSegment> assignments = new LinkedList<>();
+        if (null != ctx.optConfExpr()) {
+            visit(ctx.optConfExpr());
+        }
+        if (null != ctx.setClauseList()) {
+            assignments = ((SetAssignmentSegment) visit(ctx.setClauseList())).getAssignments();
+        }
+        if (null != ctx.whereClause()) {
+            visit(ctx.whereClause());
+        }
+        return new OnDuplicateKeyColumnsSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), assignments);
+    }
+    
+    @Override
+    public ASTNode visitInsertTarget(final InsertTargetContext ctx) {
+        SimpleTableSegment result = (SimpleTableSegment) visit(ctx.qualifiedName());
+        if (null != ctx.AS()) {
+            ColIdContext colId = ctx.colId();
+            result.setAlias(new AliasSegment(colId.start.getStartIndex(), colId.stop.getStopIndex(), createIdentifierValue(colId.getText())));
+        }
+        return result;
+    }
+    
+    @SuppressWarnings("unchecked")
+    @Override
+    public ASTNode visitQualifiedNameList(final QualifiedNameListContext ctx) {
+        CollectionValue<SimpleTableSegment> result = new CollectionValue<>();
+        if (null != ctx.qualifiedName()) {
+            result.getValue().add((SimpleTableSegment) visit(ctx.qualifiedName()));
+        }
+        if (null != ctx.qualifiedNameList()) {
+            result.combine((CollectionValue<SimpleTableSegment>) visit(ctx.qualifiedNameList()));
+        }
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitQualifiedName(final QualifiedNameContext ctx) {
+        if (null != ctx.indirection()) {
+            AttrNameContext attrName = ctx.indirection().indirectionEl().attrName();
+            TableNameSegment tableName = new TableNameSegment(attrName.start.getStartIndex(), attrName.stop.getStopIndex(), createIdentifierValue(attrName.getText()));
+            OwnerSegment owner = new OwnerSegment(ctx.colId().start.getStartIndex(), ctx.colId().stop.getStopIndex(), createIdentifierValue(ctx.colId().getText()));
+            SimpleTableSegment result = new SimpleTableSegment(tableName);
+            if (null != ctx.indirection().indirection()) {
+                OwnerSegment tableOwner = createTableOwner(ctx.indirection().indirection());
+                tableOwner.setOwner(owner);
+                result.setOwner(tableOwner);
+            } else {
+                result.setOwner(owner);
+            }
+            return result;
+        }
+        return new SimpleTableSegment(new TableNameSegment(ctx.colId().start.getStartIndex(), ctx.colId().stop.getStopIndex(), createIdentifierValue(ctx.colId().getText())));
+    }
+    
+    @SuppressWarnings("unchecked")
+    @Override
+    public ASTNode visitInsertRest(final InsertRestContext ctx) {
+        InsertStatement.InsertStatementBuilder result = InsertStatement.builder().databaseType(databaseType);
+        if (null == ctx.insertColumnList()) {
+            result.insertColumns(new InsertColumnsSegment(ctx.start.getStartIndex() - 1, ctx.start.getStartIndex() - 1, Collections.emptyList()));
+        } else {
+            InsertColumnListContext insertColumns = ctx.insertColumnList();
+            CollectionValue<ColumnSegment> columns = (CollectionValue<ColumnSegment>) visit(insertColumns);
+            InsertColumnsSegment insertColumnsSegment = new InsertColumnsSegment(insertColumns.start.getStartIndex() - 1, insertColumns.stop.getStopIndex() + 1, columns.getValue());
+            result.insertColumns(insertColumnsSegment);
+        }
+        if (null != ctx.select()) {
+            SelectNoParensContext select = ctx.select().selectNoParens();
+            ValuesClauseContext values = null == select || null == select.selectClauseN().simpleSelect() ? null : select.selectClauseN().simpleSelect().valuesClause();
+            if (null == values || null != select.withClause() || null != select.sortClause() || null != select.selectLimit() || null != select.forLockingClause()) {
+                SelectStatement selectStatement = (SelectStatement) visit(ctx.select());
+                result.insertSelect(new SubquerySegment(ctx.select().start.getStartIndex(), ctx.select().stop.getStopIndex(), selectStatement, getOriginalText(ctx.select())));
+            } else {
+                result.values(createInsertValuesSegments(values));
+            }
+        }
+        return result.build();
+    }
+    
+    @SuppressWarnings("unchecked")
+    @Override
+    public ASTNode visitInsertColumnList(final InsertColumnListContext ctx) {
+        CollectionValue<ColumnSegment> result = new CollectionValue<>();
+        if (null != ctx.insertColumnList()) {
+            result.getValue().addAll(((CollectionValue<ColumnSegment>) visit(ctx.insertColumnList())).getValue());
+        }
+        result.getValue().add((ColumnSegment) visit(ctx.insertColumnItem()));
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitInsertColumnItem(final InsertColumnItemContext ctx) {
+        visitIndirectionExpressions(ctx.optIndirection());
+        if (null != ctx.optIndirection().indirectionEl() && null != ctx.optIndirection().indirectionEl().attrName()) {
+            AttrNameContext attrName = ctx.optIndirection().indirectionEl().attrName();
+            ColumnSegment result = new ColumnSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), createIdentifierValue(attrName.getText()));
+            result.setOwner(new OwnerSegment(ctx.colId().start.getStartIndex(), ctx.colId().stop.getStopIndex(), createIdentifierValue(ctx.colId().getText())));
+            return result;
+        }
+        return new ColumnSegment(ctx.colId().start.getStartIndex(), ctx.stop.getStopIndex(), createIdentifierValue(ctx.colId().getText()));
+    }
+    
+    private void visitIndirectionExpressions(final OptIndirectionContext ctx) {
+        if (null != ctx.optIndirection()) {
+            visitIndirectionExpressions(ctx.optIndirection());
+        }
+        if (null != ctx.indirectionEl()) {
+            visit(ctx.indirectionEl());
+        }
+    }
+    
+    private Collection<InsertValuesSegment> createInsertValuesSegments(final ValuesClauseContext ctx) {
+        Collection<InsertValuesSegment> result = new LinkedList<>();
+        if (null != ctx.valuesClause()) {
+            Collection<InsertValuesSegment> expressions = createInsertValuesSegments(ctx.valuesClause());
+            result.addAll(expressions);
+        }
+        Collection<ExpressionSegment> expressions = createInsertValuesSegments(ctx.exprList());
+        InsertValuesSegment insertValuesSegment = new InsertValuesSegment(ctx.LP_().getSymbol().getStartIndex(), ctx.RP_().getSymbol().getStopIndex(), (List<ExpressionSegment>) expressions);
+        result.add(insertValuesSegment);
+        return result;
+    }
+    
+    private Collection<ExpressionSegment> createInsertValuesSegments(final ExprListContext ctx) {
+        Collection<ExpressionSegment> result = new LinkedList<>();
+        if (null != ctx.exprList()) {
+            Collection<ExpressionSegment> tmpResult = createInsertValuesSegments(ctx.exprList());
+            result.addAll(tmpResult);
+        }
+        ExpressionSegment expr = (ExpressionSegment) visit(ctx.aExpr());
+        result.add(expr);
+        return result;
+    }
+    
+    private Collection<ColumnAssignmentSegment> generateAssignmentSegments(final SetClauseListContext ctx) {
+        Collection<ColumnAssignmentSegment> result = new LinkedList<>();
+        if (null != ctx.setClauseList()) {
+            Collection<ColumnAssignmentSegment> tmpResult = generateAssignmentSegments(ctx.setClauseList());
+            result.addAll(tmpResult);
+        }
+        ColumnAssignmentSegment assignmentSegment = (ColumnAssignmentSegment) visit(ctx.setClause());
+        result.add(assignmentSegment);
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitSetClause(final SetClauseContext ctx) {
+        List<ColumnSegment> columnSegments = new LinkedList<>();
+        if (null == ctx.setTarget()) {
+            appendSetTargets(ctx.setTargetList(), columnSegments);
+        } else {
+            columnSegments.add((ColumnSegment) visit(ctx.setTarget()));
+        }
+        ExpressionSegment expressionSegment = (ExpressionSegment) visit(ctx.aExpr());
+        return new ColumnAssignmentSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), columnSegments, expressionSegment);
+    }
+    
+    private void appendSetTargets(final SetTargetListContext ctx, final Collection<ColumnSegment> columns) {
+        if (null != ctx.setTargetList()) {
+            appendSetTargets(ctx.setTargetList(), columns);
+        }
+        columns.add((ColumnSegment) visit(ctx.setTarget()));
+    }
+    
+    @Override
+    public ASTNode visitSetTarget(final SetTargetContext ctx) {
+        visitIndirectionExpressions(ctx.optIndirection());
+        List<IdentifierValue> fieldAttributes = getSetTargetFieldAttributes(ctx.optIndirection());
+        ColumnSegment result = new ColumnSegment(ctx.colId().start.getStartIndex(), ctx.stop.getStopIndex(), createIdentifierValue(ctx.colId().getText()));
+        if (!fieldAttributes.isEmpty()) {
+            result.setNestedObjectAttributes(fieldAttributes);
+        }
+        return result;
+    }
+    
+    private List<IdentifierValue> getSetTargetFieldAttributes(final OptIndirectionContext ctx) {
+        if (null == ctx.indirectionEl()) {
+            return Collections.emptyList();
+        }
+        List<IdentifierValue> result = new LinkedList<>();
+        OptIndirectionContext current = ctx;
+        while (null != current.indirectionEl()) {
+            ShardingSpherePreconditions.checkState(null == current.indirectionEl().ASTERISK_() && null == current.indirectionEl().DOT_ASTERISK_(),
+                    () -> new SQLParsingException("Only field indirection is supported in assignment targets"));
+            AttrNameContext attrName = current.indirectionEl().attrName();
+            if (null != attrName) {
+                result.add(0, createIdentifierValue(attrName.getText()));
+            }
+            current = current.optIndirection();
+        }
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitRelationExprOptAlias(final RelationExprOptAliasContext ctx) {
+        SimpleTableSegment result = (SimpleTableSegment) visit(ctx.relationExpr().qualifiedName());
+        if (null != ctx.colId()) {
+            result.setAlias(new AliasSegment(ctx.colId().start.getStartIndex(), ctx.stop.getStopIndex(), createIdentifierValue(ctx.colId().getText())));
+        }
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitUpdate(final UpdateContext ctx) {
+        WithSegment with = null == ctx.withClause() ? null : (WithSegment) visit(ctx.withClause());
+        SimpleTableSegment tableSegment = (SimpleTableSegment) visit(ctx.relationExprOptAlias());
+        UpdateStatement.UpdateStatementBuilder result = UpdateStatement.builder()
+                .databaseType(databaseType)
+                .with(with)
+                .table(tableSegment)
+                .setAssignment((SetAssignmentSegment) visit(ctx.setClauseList()));
+        if (null != ctx.fromClause()) {
+            result.from((TableSegment) visit(ctx.fromClause()));
+        }
+        if (null != ctx.whereOrCurrentClause()) {
+            result.where((WhereSegment) visit(ctx.whereOrCurrentClause()));
+        }
+        if (null != ctx.returningClause()) {
+            result.returning((ReturningSegment) visit(ctx.returningClause()));
+        }
+        UpdateStatement updateStatement = result.build();
+        updateStatement.addParameterMarkers(getParameterMarkerSegments());
+        return updateStatement;
+    }
+    
+    @Override
+    public ASTNode visitSetClauseList(final SetClauseListContext ctx) {
+        Collection<ColumnAssignmentSegment> assignments = generateAssignmentSegments(ctx);
+        return new SetAssignmentSegment(ctx.start.getStartIndex() - 4, ctx.stop.getStopIndex(), assignments);
+    }
+    
+    @Override
+    public ASTNode visitDelete(final DeleteContext ctx) {
+        WithSegment with = null == ctx.withClause() ? null : (WithSegment) visit(ctx.withClause());
+        TableSegment tableSegment = createDeleteTableSegment(ctx);
+        DeleteStatement.DeleteStatementBuilder result = DeleteStatement.builder().databaseType(databaseType).table(tableSegment).with(with);
+        if (null != ctx.whereOrCurrentClause()) {
+            result.where((WhereSegment) visit(ctx.whereOrCurrentClause()));
+        }
+        if (null != ctx.returningClause()) {
+            result.returning((ReturningSegment) visit(ctx.returningClause()));
+        }
+        DeleteStatement deleteStatement = result.build();
+        deleteStatement.addParameterMarkers(getParameterMarkerSegments());
+        return deleteStatement;
+    }
+    
+    private TableSegment createDeleteTableSegment(final DeleteContext ctx) {
+        SimpleTableSegment tableSegment = (SimpleTableSegment) visit(ctx.relationExprOptAlias());
+        if (null == ctx.usingClause()) {
+            return tableSegment;
+        }
+        TableSegment usingTable = (TableSegment) visit(ctx.usingClause().fromList());
+        JoinTableSegment relationTable = new JoinTableSegment();
+        relationTable.setStartIndex(tableSegment.getStartIndex());
+        relationTable.setStopIndex(usingTable.getStopIndex());
+        relationTable.setLeft(tableSegment);
+        relationTable.setRight(usingTable);
+        relationTable.setJoinType(JoinType.COMMA.name());
+        DeleteMultiTableSegment result = new DeleteMultiTableSegment();
+        result.setStartIndex(tableSegment.getStartIndex());
+        result.setStopIndex(usingTable.getStopIndex());
+        result.getActualDeleteTables().add(tableSegment);
+        result.setRelationTable(relationTable);
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitWhereOrCurrentClause(final WhereOrCurrentClauseContext ctx) {
+        if (null != ctx.whereClause()) {
+            return visit(ctx.whereClause());
+        }
+        int startIndex = ctx.CURRENT().getSymbol().getStartIndex();
+        int stopIndex = ctx.stop.getStopIndex();
+        String text = ctx.start.getInputStream().getText(new Interval(startIndex, stopIndex));
+        return new WhereSegment(ctx.start.getStartIndex(), stopIndex, new CommonExpressionSegment(startIndex, stopIndex, text, Collections.emptyList()));
+    }
+    
+    @Override
+    public ASTNode visitReturningClause(final ReturningClauseContext ctx) {
+        ReturningSegment result = new ReturningSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), (ProjectionsSegment) visit(ctx.targetList()));
+        for (ReturningOptionContext each : ctx.returningOption()) {
+            AliasSegment alias = new AliasSegment(each.colId().start.getStartIndex(), each.colId().stop.getStopIndex(), createIdentifierValue(each.colId().getText()));
+            if (null != each.OLD()) {
+                result.setOldAlias(alias);
+            } else {
+                result.setNewAlias(alias);
+            }
+        }
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitMerge(final MergeContext ctx) {
+        MergeStatement.MergeStatementBuilder result = MergeStatement.builder().databaseType(databaseType).target((TableSegment) visit(ctx.relationExprOptAlias()));
+        if (null != ctx.withClause()) {
+            result.with((WithSegment) visit(ctx.withClause()));
+        }
+        result.source((TableSegment) visit(ctx.mergeUsingClause().tableReference()));
+        result.expression(new ExpressionWithParamsSegment(ctx.mergeUsingClause().aExpr().start.getStartIndex(), ctx.mergeUsingClause().aExpr().stop.getStopIndex(),
+                (ExpressionSegment) visit(ctx.mergeUsingClause().aExpr())));
+        Collection<MergeWhenAndThenSegment> whenAndThens = new LinkedList<>();
+        for (MergeWhenClauseContext each : ctx.mergeWhenClause()) {
+            whenAndThens.add((MergeWhenAndThenSegment) visit(each));
+        }
+        result.whenAndThens(whenAndThens);
+        if (null != ctx.returningClause()) {
+            result.returning((ReturningSegment) visit(ctx.returningClause()));
+        }
+        MergeStatement mergeStatement = result.build();
+        mergeStatement.addParameterMarkers(getParameterMarkerSegments());
+        return mergeStatement;
+    }
+    
+    @Override
+    public ASTNode visitMergeWhenClause(final MergeWhenClauseContext ctx) {
+        MergeWhenAndThenSegment result = new MergeWhenAndThenSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(ctx));
+        if (null != ctx.aExpr()) {
+            result.setAndExpr((ExpressionSegment) visit(ctx.aExpr()));
+        }
+        if (null != ctx.mergeMatchedThenClause()) {
+            fillMatchedThenClause(result, ctx.mergeMatchedThenClause());
+        }
+        if (null != ctx.mergeNotMatchedThenClause() && null != ctx.mergeNotMatchedThenClause().insertRest()) {
+            InsertRestContext insertRest = ctx.mergeNotMatchedThenClause().insertRest();
+            result.setInsert(null == insertRest.select() ? InsertStatement.builder().databaseType(databaseType).build() : (InsertStatement) visit(insertRest));
+        }
+        return result;
+    }
+    
+    private void fillMatchedThenClause(final MergeWhenAndThenSegment mergeWhenAndThen, final MergeMatchedThenClauseContext ctx) {
+        if (null != ctx.DELETE()) {
+            mergeWhenAndThen.setDelete(DeleteStatement.builder().databaseType(databaseType).build());
+        }
+        if (null != ctx.setClauseList()) {
+            mergeWhenAndThen.setUpdate(UpdateStatement.builder().databaseType(databaseType).setAssignment((SetAssignmentSegment) visit(ctx.setClauseList())).build());
+        }
+    }
+    
+    @Override
+    public ASTNode visitSelect(final SelectContext ctx) {
+        SelectStatement result = (SelectStatement) visit(null == ctx.selectNoParens() ? ctx.selectWithParens() : ctx.selectNoParens());
+        result.addParameterMarkers(getParameterMarkerSegments());
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitSelectNoParens(final SelectNoParensContext ctx) {
+        WithSegment with = null == ctx.withClause() ? null : (WithSegment) visit(ctx.withClause());
+        SelectStatement result = (SelectStatement) visit(ctx.selectClauseN());
+        SelectStatement.SelectStatementBuilder selectStatementBuilder = createSelectStatementBuilder(result);
+        if (null != with) {
+            selectStatementBuilder.with(with);
+        }
+        if (null != ctx.sortClause()) {
+            selectStatementBuilder.orderBy((OrderBySegment) visit(ctx.sortClause()));
+        }
+        if (null != ctx.selectLimit()) {
+            selectStatementBuilder.limit((LimitSegment) visit(ctx.selectLimit()));
+        }
+        if (null != ctx.forLockingClause()) {
+            selectStatementBuilder.lock((LockSegment) visit(ctx.forLockingClause()));
+        }
+        return selectStatementBuilder.build();
+    }
+    
+    @Override
+    public ASTNode visitWithClause(final WithClauseContext ctx) {
+        Collection<CommonTableExpressionSegment> commonTableExpressions = new LinkedList<>();
+        for (CommonTableExprContext each : ctx.cteList().commonTableExpr()) {
+            commonTableExpressions.add((CommonTableExpressionSegment) visit(each));
+        }
+        return new WithSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), commonTableExpressions, null != ctx.RECURSIVE());
+    }
+    
+    @Override
+    public ASTNode visitCommonTableExpr(final CommonTableExprContext ctx) {
+        DMLStatement statement = (DMLStatement) visit(ctx.preparableStmt());
+        int subqueryStartIndex = null == ctx.searchClause() && null == ctx.cycleClause() ? ctx.start.getStartIndex() : ctx.preparableStmt().start.getStartIndex();
+        int subqueryStopIndex = null == ctx.searchClause() && null == ctx.cycleClause() ? ctx.stop.getStopIndex() : ctx.preparableStmt().stop.getStopIndex();
+        SubquerySegment subquery = statement instanceof SelectStatement
+                ? new SubquerySegment(subqueryStartIndex, subqueryStopIndex, (SelectStatement) statement, getOriginalText(ctx.preparableStmt()))
+                : null;
+        CommonTableExpressionSegment result = new CommonTableExpressionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), (AliasSegment) visit(ctx.alias()), subquery,
+                statement instanceof SelectStatement ? null : statement);
+        if (null != ctx.optNameList().nameList()) {
+            result.getColumns().addAll(generateUsingColumn(ctx.optNameList().nameList()));
+        }
+        if (null != ctx.searchClause()) {
+            result.getSearchColumns().addAll(generateUsingColumn(ctx.searchClause().nameList()));
+            result.getColumns().add(createColumnSegment(ctx.searchClause().colId()));
+        }
+        if (null != ctx.cycleClause()) {
+            result.getCycleColumns().addAll(generateUsingColumn(ctx.cycleClause().nameList()));
+            for (ColIdContext each : ctx.cycleClause().colId()) {
+                result.getColumns().add(createColumnSegment(each));
+            }
+            for (AexprConstContext each : ctx.cycleClause().aexprConst()) {
+                visit(each);
+            }
+        }
+        return result;
+    }
+    
+    private ColumnSegment createColumnSegment(final ColIdContext ctx) {
+        return new ColumnSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), createIdentifierValue(ctx.getText()));
+    }
+    
+    @Override
+    public ASTNode visitAlias(final AliasContext ctx) {
+        return new AliasSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), createIdentifierValue(ctx.identifier().getText()));
+    }
+    
+    @Override
+    public ASTNode visitForLockingClause(final ForLockingClauseContext ctx) {
+        return new LockSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex());
+    }
+    
+    @Override
+    public ASTNode visitSelectWithParens(final SelectWithParensContext ctx) {
+        if (null != ctx.selectWithParens()) {
+            return visit(ctx.selectWithParens());
+        }
+        return visit(ctx.selectNoParens());
+    }
+    
+    @Override
+    public ASTNode visitSelectClauseN(final SelectClauseNContext ctx) {
+        if (null != ctx.simpleSelect()) {
+            return visit(ctx.simpleSelect());
+        }
+        if (null != ctx.selectClauseN() && !ctx.selectClauseN().isEmpty()) {
+            SelectStatement left = (SelectStatement) visit(ctx.selectClauseN(0));
+            CombineSegment combineSegment = new CombineSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(),
+                    createSubquerySegment(ctx.selectClauseN(0), left), getCombineType(ctx), createSubquerySegment(ctx.selectClauseN(1), (SelectStatement) visit(ctx.selectClauseN(1))));
+            return SelectStatement.builder().databaseType(databaseType).projections(left.getProjections()).from(left.getFrom().orElse(null)).combine(combineSegment).build();
+        }
+        return visit(ctx.selectWithParens());
+    }
+    
+    private SubquerySegment createSubquerySegment(final SelectClauseNContext ctx, final SelectStatement selectStatement) {
+        return new SubquerySegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), selectStatement, getOriginalText(ctx));
+    }
+    
+    private CombineType getCombineType(final SelectClauseNContext ctx) {
+        boolean isDistinct = null == ctx.allOrDistinct() || null != ctx.allOrDistinct().DISTINCT();
+        if (null != ctx.UNION()) {
+            return isDistinct ? CombineType.UNION : CombineType.UNION_ALL;
+        }
+        if (null != ctx.INTERSECT()) {
+            return isDistinct ? CombineType.INTERSECT : CombineType.INTERSECT_ALL;
+        }
+        return isDistinct ? CombineType.EXCEPT : CombineType.EXCEPT_ALL;
+    }
+    
+    @Override
+    public ASTNode visitSimpleSelect(final SimpleSelectContext ctx) {
+        SelectStatement.SelectStatementBuilder selectStatementBuilder = SelectStatement.builder().databaseType(databaseType);
+        if (null != ctx.targetList()) {
+            ProjectionsSegment projects = (ProjectionsSegment) visit(ctx.targetList());
+            if (null != ctx.distinctClause()) {
+                projects.setDistinctRow(true);
+            }
+            selectStatementBuilder.projections(projects);
+        } else if (null != ctx.valuesClause()) {
+            selectStatementBuilder.projections(createValuesProjections(ctx.valuesClause()));
+        } else {
+            selectStatementBuilder.projections(new ProjectionsSegment(-1, -1));
+        }
+        if (null != ctx.intoClause()) {
+            selectStatementBuilder.into((TableSegment) visit(ctx.intoClause()));
+        }
+        if (null != ctx.fromClause()) {
+            selectStatementBuilder.from((TableSegment) visit(ctx.fromClause()));
+        }
+        if (null != ctx.whereClause()) {
+            selectStatementBuilder.where((WhereSegment) visit(ctx.whereClause()));
+        }
+        if (null != ctx.groupClause()) {
+            selectStatementBuilder.groupBy((GroupBySegment) visit(ctx.groupClause()));
+        }
+        if (null != ctx.havingClause()) {
+            selectStatementBuilder.having((HavingSegment) visit(ctx.havingClause()));
+        }
+        if (null != ctx.windowClause()) {
+            selectStatementBuilder.window((WindowSegment) visit(ctx.windowClause()));
+        }
+        return selectStatementBuilder.build();
+    }
+    
+    private ProjectionsSegment createValuesProjections(final ValuesClauseContext ctx) {
+        ProjectionsSegment result = new ProjectionsSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex());
+        Collection<InsertValuesSegment> values = createInsertValuesSegments(ctx);
+        if (values.isEmpty()) {
+            return result;
+        }
+        for (ExpressionSegment each : values.iterator().next().getValues()) {
+            result.getProjections().add(new ExpressionProjectionSegment(each.getStartIndex(), each.getStopIndex(), each.getText(), each));
+        }
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitIntoClause(final IntoClauseContext ctx) {
+        return visit(ctx.optTempTableName().qualifiedName());
+    }
+    
+    @Override
+    public ASTNode visitHavingClause(final HavingClauseContext ctx) {
+        ExpressionSegment expr = (ExpressionSegment) visit(ctx.aExpr());
+        return new HavingSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), expr);
+    }
+    
+    @Override
+    public ASTNode visitWindowClause(final WindowClauseContext ctx) {
+        WindowSegment result = new WindowSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex());
+        appendWindowItems(ctx.windowDefinitionList(), result.getItemSegments());
+        return result;
+    }
+    
+    private void appendWindowItems(final WindowDefinitionListContext ctx, final Collection<WindowItemSegment> windowItems) {
+        if (null != ctx.windowDefinitionList()) {
+            appendWindowItems(ctx.windowDefinitionList(), windowItems);
+            windowItems.add((WindowItemSegment) visit(ctx.windowDefinition()));
+            return;
+        }
+        windowItems.add((WindowItemSegment) visit(ctx.windowDefinition()));
+    }
+    
+    @Override
+    public ASTNode visitWindowDefinition(final WindowDefinitionContext ctx) {
+        WindowItemSegment result = new WindowItemSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex());
+        result.setWindowName(createIdentifierValue(ctx.colId().getText()));
+        setWindowSpecification(ctx.windowSpecification(), result);
+        return result;
+    }
+    
+    private WindowItemSegment createWindowItem(final WindowSpecificationContext ctx) {
+        WindowItemSegment result = new WindowItemSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex());
+        if (null != ctx.existingWindowName()) {
+            result.setWindowName(createIdentifierValue(ctx.existingWindowName().colId().getText()));
+        }
+        setWindowSpecification(ctx, result);
+        return result;
+    }
+    
+    @SuppressWarnings("unchecked")
+    private void setWindowSpecification(final WindowSpecificationContext ctx, final WindowItemSegment result) {
+        if (null != ctx.partitionClause()) {
+            CollectionValue<ExpressionSegment> value = (CollectionValue<ExpressionSegment>) visit(ctx.partitionClause().exprList());
+            result.setPartitionListSegments(value.getValue());
+        }
+        if (null != ctx.sortClause()) {
+            OrderBySegment orderBySegment = (OrderBySegment) visit(ctx.sortClause());
+            result.setOrderBySegment(orderBySegment);
+        }
+        if (null != ctx.frameClause()) {
+            Collection<ExpressionSegment> children = new LinkedList<>();
+            collectFunctionParameters(ctx.frameClause(), children);
+            result.setFrameClause(new CommonExpressionSegment(ctx.frameClause().start.getStartIndex(), ctx.frameClause().stop.getStopIndex(), ctx.frameClause().getText(), children));
+        }
+    }
+    
+    @Override
+    public ASTNode visitGroupClause(final GroupClauseContext ctx) {
+        Collection<OrderByItemSegment> items = new LinkedList<>();
+        for (GroupByItemContext each : ctx.groupByList().groupByItem()) {
+            items.add((OrderByItemSegment) visit(each));
+        }
+        return new GroupBySegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), items, false, containsGroupingExtension(ctx.groupByList().groupByItem()));
+    }
+    
+    private boolean containsGroupingExtension(final Collection<GroupByItemContext> groupByItems) {
+        for (GroupByItemContext each : groupByItems) {
+            if (null != each.emptyGroupingSet() || null != each.cubeClause() || null != each.rollupClause() || null != each.groupingSetsClause()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    @Override
+    public ASTNode visitGroupByItem(final GroupByItemContext ctx) {
+        if (null != ctx.aExpr()) {
+            ASTNode astNode = visit(ctx.aExpr());
+            if (astNode instanceof ColumnSegment) {
+                return new ColumnOrderByItemSegment((ColumnSegment) astNode, OrderDirection.ASC, null);
+            }
+            if (astNode instanceof LiteralExpressionSegment && !((LiteralExpressionSegment) astNode).isNullLiteral()) {
+                LiteralExpressionSegment index = (LiteralExpressionSegment) astNode;
+                return new IndexOrderByItemSegment(index.getStartIndex(), index.getStopIndex(),
+                        Integer.parseInt(index.getLiterals().toString()), OrderDirection.ASC, null);
+            }
+            return new ExpressionOrderByItemSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(ctx), OrderDirection.ASC, null, (ExpressionSegment) visit(ctx.aExpr()));
+        }
+        return new ExpressionOrderByItemSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(ctx), OrderDirection.ASC, null);
+    }
+    
+    @Override
+    public ASTNode visitTargetList(final TargetListContext ctx) {
+        ProjectionsSegment result = new ProjectionsSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex());
+        if (null != ctx.targetList()) {
+            ProjectionsSegment projections = (ProjectionsSegment) visit(ctx.targetList());
+            result.getProjections().addAll(projections.getProjections());
+        }
+        ProjectionSegment projection = (ProjectionSegment) visit(ctx.targetEl());
+        result.getProjections().add(projection);
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitTargetEl(final TargetElContext ctx) {
+        ProjectionSegment result = createProjectionSegment(ctx, ctx.aExpr());
+        ParserRuleContext alias = null == ctx.colLabel() ? ctx.identifier() : ctx.colLabel();
+        if (null != alias) {
+            ((AliasAvailable) result).setAlias(new AliasSegment(alias.start.getStartIndex(), alias.stop.getStopIndex(), createIdentifierValue(alias.getText())));
+        }
+        return result;
+    }
+    
+    private ProjectionSegment createProjectionSegment(final TargetElContext ctx, final AExprContext expr) {
+        if (null != ctx.ASTERISK_()) {
+            return new ShorthandProjectionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex());
+        }
+        if (null != ctx.DOT_ASTERISK_()) {
+            ShorthandProjectionSegment result = new ShorthandProjectionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex());
+            result.setOwner(new OwnerSegment(ctx.colId().start.getStartIndex(), ctx.colId().stop.getStopIndex(), createIdentifierValue(ctx.colId().getText())));
+            return result;
+        }
+        if (null != ctx.aExpr()) {
+            ASTNode projection = visit(ctx.aExpr());
+            return createProjectionSegment(ctx, expr, projection);
+        }
+        return new ExpressionProjectionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(expr), null);
+    }
+    
+    private ProjectionSegment createProjectionSegment(final TargetElContext ctx, final AExprContext expr, final ASTNode projection) {
+        if (projection instanceof ColumnSegment) {
+            return new ColumnProjectionSegment((ColumnSegment) projection);
+        }
+        if (projection instanceof AggregationProjectionSegment) {
+            return (AggregationProjectionSegment) projection;
+        }
+        if (projection instanceof SubqueryExpressionSegment) {
+            SubqueryExpressionSegment subqueryExpression = (SubqueryExpressionSegment) projection;
+            String text = ctx.start.getInputStream().getText(new Interval(subqueryExpression.getStartIndex(), subqueryExpression.getStopIndex()));
+            return new SubqueryProjectionSegment(subqueryExpression.getSubquery(), text);
+        }
+        if (projection instanceof ExpressionSegment) {
+            return new ExpressionProjectionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(expr), (ExpressionSegment) projection);
+        }
+        return new ExpressionProjectionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(expr), null);
+    }
+    
+    @Override
+    public ASTNode visitFromClause(final FromClauseContext ctx) {
+        return visit(ctx.fromList());
+    }
+    
+    @Override
+    public ASTNode visitFromList(final FromListContext ctx) {
+        if (null != ctx.fromList()) {
+            JoinTableSegment result = new JoinTableSegment();
+            result.setStartIndex(ctx.start.getStartIndex());
+            result.setStopIndex(ctx.stop.getStopIndex());
+            result.setLeft((TableSegment) visit(ctx.fromList()));
+            result.setRight((TableSegment) visit(ctx.tableReference()));
+            result.setJoinType(JoinType.COMMA.name());
+            return result;
+        }
+        return visit(ctx.tableReference());
+    }
+    
+    @Override
+    public ASTNode visitTableReference(final TableReferenceContext ctx) {
+        if (null != ctx.relationExpr()) {
+            return getSimpleTableSegment(ctx);
+        }
+        if (null != ctx.selectWithParens()) {
+            return getSubqueryTableSegment(ctx);
+        }
+        if (null != ctx.tableReference()) {
+            return getJoinTableSegment(ctx);
+        }
+        if (null != ctx.functionTable()) {
+            return getFunctionTableSegment(ctx);
+        }
+        ExpressionSegment expression = (ExpressionSegment) visit(null == ctx.xmlTable() ? ctx.jsonTable() : ctx.xmlTable());
+        FunctionTableSegment result = new FunctionTableSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), expression);
+        if (null != ctx.aliasClause()) {
+            result.setAlias((AliasSegment) visit(ctx.aliasClause()));
+        }
+        if (null != ctx.xmlTable()) {
+            for (XmlTableColumnElContext each : ctx.xmlTable().xmlTableColumnList().xmlTableColumnEl()) {
+                result.getColumns().add(createColumnSegment(each.colId()));
+            }
+        } else {
+            collectJsonTableColumns(ctx.jsonTable().jsonTableColumn(), result.getColumns());
+        }
+        if (null != ctx.aliasClause() && null != ctx.aliasClause().nameList()) {
+            applyTableFunctionColumnAliases(result.getColumns(), ctx.aliasClause().nameList());
+        }
+        return result;
+    }
+    
+    private SimpleTableSegment getSimpleTableSegment(final TableReferenceContext ctx) {
+        SimpleTableSegment result = (SimpleTableSegment) visit(ctx.relationExpr().qualifiedName());
+        if (null != ctx.aliasClause()) {
+            result.setAlias((AliasSegment) visit(ctx.aliasClause()));
+        }
+        return result;
+    }
+    
+    private SubqueryTableSegment getSubqueryTableSegment(final TableReferenceContext ctx) {
+        SelectStatement select = (SelectStatement) visit(ctx.selectWithParens());
+        SubquerySegment subquery = new SubquerySegment(ctx.selectWithParens().start.getStartIndex(), ctx.selectWithParens().stop.getStopIndex(), select, getOriginalText(ctx.selectWithParens()));
+        AliasSegment alias = null == ctx.aliasClause() ? null : (AliasSegment) visit(ctx.aliasClause());
+        SubqueryTableSegment result = new SubqueryTableSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), subquery);
+        result.setAlias(alias);
+        return result;
+    }
+    
+    private ASTNode getJoinTableSegment(final TableReferenceContext ctx) {
+        JoinTableSegment result = new JoinTableSegment();
+        result.setLeft((TableSegment) visit(ctx.tableReference()));
+        result.setStartIndex(ctx.start.getStartIndex());
+        result.setStopIndex(ctx.stop.getStopIndex());
+        visitJoinedTable(ctx.joinedTable(), result);
+        if (null != ctx.aliasClause()) {
+            result.setAlias((AliasSegment) visit(ctx.aliasClause()));
+        }
+        return result;
+    }
+    
+    private FunctionTableSegment getFunctionTableSegment(final TableReferenceContext ctx) {
+        ExpressionSegment expression;
+        Collection<ColumnSegment> columns = new LinkedList<>();
+        if (null != ctx.functionTable().functionExprWindowless()) {
+            expression = (ExpressionSegment) visit(ctx.functionTable().functionExprWindowless());
+        } else {
+            FunctionSegment function = new FunctionSegment(ctx.functionTable().start.getStartIndex(), ctx.functionTable().stop.getStopIndex(), "ROWS FROM", getOriginalText(ctx.functionTable()));
+            for (RowsFromItemContext each : ctx.functionTable().rowsFromList().rowsFromItem()) {
+                function.getParameters().add((ExpressionSegment) visit(each.functionExprWindowless()));
+                if (null != each.columnDefList()) {
+                    columns.addAll(createTableFunctionColumns(each.columnDefList().tableFuncElementList().tableFuncElement()));
+                }
+            }
+            expression = function;
+        }
+        FunctionTableSegment result = new FunctionTableSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), expression);
+        result.getColumns().addAll(columns);
+        if (null != ctx.funcAliasClause() && null != ctx.funcAliasClause().aliasClause()) {
+            AliasClauseContext aliasClause = ctx.funcAliasClause().aliasClause();
+            result.setAlias((AliasSegment) visit(aliasClause));
+            if (null != aliasClause.nameList()) {
+                applyTableFunctionColumnAliases(result.getColumns(), aliasClause.nameList());
+            }
+        } else if (null != ctx.funcAliasClause()) {
+            if (null != ctx.funcAliasClause().colId()) {
+                ColIdContext alias = ctx.funcAliasClause().colId();
+                result.setAlias(new AliasSegment(alias.start.getStartIndex(), alias.stop.getStopIndex(), createIdentifierValue(alias.getText())));
+            }
+            result.getColumns().addAll(createTableFunctionColumns(ctx.funcAliasClause().tableFuncElementList().tableFuncElement()));
+        }
+        return result;
+    }
+    
+    private Collection<ColumnSegment> createTableFunctionColumns(final Collection<TableFuncElementContext> contexts) {
+        Collection<ColumnSegment> result = new LinkedList<>();
+        for (TableFuncElementContext each : contexts) {
+            result.add(createColumnSegment(each.colId()));
+        }
+        return result;
+    }
+    
+    private void collectJsonTableColumns(final Collection<JsonTableColumnContext> contexts, final Collection<ColumnSegment> columns) {
+        for (JsonTableColumnContext each : contexts) {
+            if (null == each.NESTED()) {
+                columns.add(createColumnSegment(each.colId()));
+            } else {
+                collectJsonTableColumns(each.jsonTableColumn(), columns);
+            }
+        }
+    }
+    
+    private void applyTableFunctionColumnAliases(final Collection<ColumnSegment> columns, final NameListContext aliases) {
+        List<ColumnSegment> result = generateUsingColumn(aliases);
+        if (result.size() < columns.size()) {
+            result.addAll(new ArrayList<>(columns).subList(result.size(), columns.size()));
+        }
+        columns.clear();
+        columns.addAll(result);
+    }
+    
+    @Override
+    public ASTNode visitJsonTable(final JsonTableContext ctx) {
+        return createJsonFunction(ctx);
+    }
+    
+    @Override
+    public ASTNode visitJsonTablePath(final JsonTablePathContext ctx) {
+        if (null == ctx.STRING_()) {
+            String delimiter = ctx.BEGIN_DOLLAR_STRING_CONSTANT().getText();
+            String text = ctx.getText();
+            return new LiteralExpressionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), text.substring(delimiter.length(), text.length() - delimiter.length()));
+        }
+        StringLiteralValue value = createStringLiteralValue(ctx.STRING_().getText(), null != ctx.UNICODE_ESCAPE(), ctx.uescape());
+        return SQLUtils.createLiteralExpression(value, ctx.start.getStartIndex(), ctx.stop.getStopIndex(), ctx.getText());
+    }
+    
+    @Override
+    public ASTNode visitXmlTable(final XmlTableContext ctx) {
+        XmlTableOptionsSegment options = new XmlTableOptionsSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), getOriginalText(ctx));
+        XmlNamespacesClauseSegment namespaces = createXmlNamespaces(ctx, options.getParameters());
+        options.getParameters().add((ExpressionSegment) visit(ctx.cExpr()));
+        options.getParameters().add((ExpressionSegment) visit(ctx.xmlExistsArgument().cExpr()));
+        for (XmlTableColumnElContext each : ctx.xmlTableColumnList().xmlTableColumnEl()) {
+            options.getXmlTableColumnSegments().add(createXmlTableColumn(each, options.getParameters()));
+        }
+        return new XmlTableFunctionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), ctx.XMLTABLE().getText(), namespaces, getOriginalText(ctx.cExpr()), options, getOriginalText(ctx));
+    }
+    
+    @Nullable
+    private XmlNamespacesClauseSegment createXmlNamespaces(final XmlTableContext ctx, final Collection<ExpressionSegment> params) {
+        if (null == ctx.xmlNamespaceList()) {
+            return null;
+        }
+        String defaultString = null;
+        Collection<XmlNamespaceStringAsIdentifierSegment> stringsAsIdentifiers = new LinkedList<>();
+        for (XmlNamespaceElContext each : ctx.xmlNamespaceList().xmlNamespaceEl()) {
+            params.add((ExpressionSegment) visit(each.bExpr()));
+            if (null == each.identifier()) {
+                defaultString = getOriginalText(each.bExpr());
+            } else {
+                stringsAsIdentifiers.add(new XmlNamespaceStringAsIdentifierSegment(each.start.getStartIndex(), each.stop.getStopIndex(), getOriginalText(each.bExpr()),
+                        createIdentifierValue(each.identifier().getText()).getValue(), getOriginalText(each)));
+            }
+        }
+        XmlNamespacesClauseSegment result = new XmlNamespacesClauseSegment(ctx.xmlNamespaceList().start.getStartIndex(), ctx.xmlNamespaceList().stop.getStopIndex(), defaultString,
+                getOriginalText(ctx.xmlNamespaceList()));
+        result.getStringAsIdentifier().addAll(stringsAsIdentifiers);
+        return result;
+    }
+    
+    private XmlTableColumnSegment createXmlTableColumn(final XmlTableColumnElContext ctx, final Collection<ExpressionSegment> params) {
+        ExpressionSegment defaultExpr = null;
+        String path = null;
+        Collection<XmlTableColumnOptionElContext> options = null == ctx.xmlTableColumnOptionList() ? Collections.emptyList()
+                : getTargetRuleContextFromParseTree(ctx.xmlTableColumnOptionList(), XmlTableColumnOptionElContext.class);
+        for (XmlTableColumnOptionElContext each : options) {
+            if (null == each.bExpr()) {
+                continue;
+            }
+            ExpressionSegment expression = (ExpressionSegment) visit(each.bExpr());
+            if (null != each.DEFAULT()) {
+                defaultExpr = expression;
+            } else {
+                path = getOriginalText(each.bExpr());
+                params.add(expression);
+            }
+        }
+        return new XmlTableColumnSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), createIdentifierValue(ctx.colId().getText()).getValue(),
+                null == ctx.typeName() ? null : getOriginalText(ctx.typeName()), path, defaultExpr, getOriginalText(ctx));
+    }
+    
+    @Override
+    public ASTNode visitFuncApplication(final FuncApplicationContext ctx) {
+        Collection<ExpressionSegment> expressionSegments = getExpressionSegments(getTargetRuleContextFromParseTree(ctx, AExprContext.class));
+        FuncNameContext funcNameContext = ctx.funcName();
+        String functionName = null == funcNameContext.typeFunctionName() ? funcNameContext.indirection().indirectionEl().attrName().getText() : funcNameContext.typeFunctionName().getText();
+        if (AggregationType.isAggregationType(functionName)) {
+            return createAggregationSegment(ctx, functionName, expressionSegments);
+        }
+        FunctionSegment result = new FunctionSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), functionName, getOriginalText(ctx));
+        if (null != funcNameContext.colId()) {
+            result.setOwner(new OwnerSegment(funcNameContext.colId().start.getStartIndex(), funcNameContext.colId().stop.getStopIndex(), createIdentifierValue(funcNameContext.colId().getText())));
+        } else if (null != funcNameContext.owner() && null != funcNameContext.typeFunctionName()) {
+            result.setOwner((OwnerSegment) visit(funcNameContext.owner()));
+        }
+        result.getParameters().addAll(expressionSegments);
+        return result;
+    }
+    
+    private void visitJoinedTable(final JoinedTableContext ctx, final JoinTableSegment tableSegment) {
+        TableSegment right = (TableSegment) visit(ctx.tableReference());
+        tableSegment.setRight(right);
+        tableSegment.setJoinType(getJoinType(ctx));
+        tableSegment.setNatural(null != ctx.naturalJoinType());
+        if (null != ctx.joinQual()) {
+            visitJoinQual(ctx.joinQual(), tableSegment);
+        }
+    }
+    
+    private String getJoinType(final JoinedTableContext ctx) {
+        if (null != ctx.crossJoinType()) {
+            return JoinType.CROSS.name();
+        }
+        if (null != ctx.innerJoinType()) {
+            return JoinType.INNER.name();
+        }
+        if (null != ctx.outerJoinType()) {
+            return getOutJoinType(ctx.outerJoinType());
+        }
+        if (null != ctx.naturalJoinType()) {
+            return getNaturalJoinType(ctx.naturalJoinType());
+        }
+        return JoinType.COMMA.name();
+    }
+    
+    private static String getNaturalJoinType(final NaturalJoinTypeContext ctx) {
+        if (null != ctx.INNER()) {
+            return JoinType.INNER.name();
+        }
+        if (null != ctx.FULL()) {
+            return JoinType.FULL.name();
+        }
+        if (null != ctx.LEFT()) {
+            return JoinType.LEFT.name();
+        }
+        if (null != ctx.RIGHT()) {
+            return JoinType.RIGHT.name();
+        }
+        return JoinType.INNER.name();
+    }
+    
+    private static String getOutJoinType(final OuterJoinTypeContext ctx) {
+        if (null == ctx.FULL()) {
+            return null == ctx.LEFT() ? JoinType.RIGHT.name() : JoinType.LEFT.name();
+        }
+        return JoinType.FULL.name();
+    }
+    
+    private void visitJoinQual(final JoinQualContext ctx, final JoinTableSegment joinTableSource) {
+        if (null != ctx.aExpr()) {
+            ExpressionSegment condition = (ExpressionSegment) visit(ctx.aExpr());
+            joinTableSource.setCondition(condition);
+        }
+        if (null != ctx.USING()) {
+            joinTableSource.setUsing(generateUsingColumn(ctx.nameList()));
+            if (null != ctx.colId()) {
+                joinTableSource.setUsingAlias(new AliasSegment(ctx.colId().start.getStartIndex(), ctx.colId().stop.getStopIndex(), createIdentifierValue(ctx.colId().getText())));
+            }
+        }
+    }
+    
+    private List<ColumnSegment> generateUsingColumn(final NameListContext ctx) {
+        List<ColumnSegment> result = new ArrayList<>();
+        if (null != ctx.nameList()) {
+            result.addAll(generateUsingColumn(ctx.nameList()));
+        }
+        if (null != ctx.name()) {
+            result.add(new ColumnSegment(ctx.name().start.getStartIndex(), ctx.name().stop.getStopIndex(), createIdentifierValue(ctx.name().getText())));
+        }
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitAliasClause(final AliasClauseContext ctx) {
+        AliasSegment result = new AliasSegment(ctx.colId().start.getStartIndex(), ctx.stop.getStopIndex(), createIdentifierValue(ctx.colId().getText()));
+        if (null != ctx.nameList()) {
+            result.getColumnAliases().addAll(generateAliasColumns(ctx.nameList()));
+        }
+        return result;
+    }
+    
+    private Collection<IdentifierValue> generateAliasColumns(final NameListContext ctx) {
+        Collection<IdentifierValue> result = new LinkedList<>();
+        if (null != ctx.nameList()) {
+            result.addAll(generateAliasColumns(ctx.nameList()));
+        }
+        if (null != ctx.name()) {
+            result.add(createIdentifierValue(ctx.name().getText()));
+        }
+        return result;
+    }
+    
+    private OwnerSegment createTableOwner(final IndirectionContext ctx) {
+        AttrNameContext attrName = ctx.indirectionEl().attrName();
+        return new OwnerSegment(attrName.start.getStartIndex(), attrName.stop.getStopIndex(), createIdentifierValue(attrName.getText()));
+    }
+    
+    @Override
+    public ASTNode visitWhereClause(final WhereClauseContext ctx) {
+        ExpressionSegment expr = (ExpressionSegment) visit(ctx.aExpr());
+        return new WhereSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), expr);
+    }
+    
+    @Override
+    public ASTNode visitSelectLimit(final SelectLimitContext ctx) {
+        LimitSegment result = null != ctx.limitClause() && null != ctx.offsetClause() ? createLimitSegmentWhenLimitAndOffset(ctx) : createLimitSegmentWhenRowCountOrOffsetAbsent(ctx);
+        if (null != ctx.limitClause() && null != ctx.limitClause().FETCH()) {
+            result.setWithTies(null != ctx.limitClause().onlyOrWithTies().TIES());
+            if (null == ctx.limitClause().selectFetchValue()) {
+                result.setImplicitRowCount(true);
+            }
+        }
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitSelectLimitValue(final SelectLimitValueContext ctx) {
+        if (null != ctx.ALL()) {
+            return null;
+        }
+        return createLimitValueSegment(ctx, (ExpressionSegment) visit(ctx.aExpr()));
+    }
+    
+    @Override
+    public ASTNode visitSelectOffsetValue(final SelectOffsetValueContext ctx) {
+        return createLimitValueSegment(ctx, (ExpressionSegment) visit(ctx.aExpr()));
+    }
+    
+    @Override
+    public ASTNode visitSelectFetchValue(final SelectFetchValueContext ctx) {
+        return createLimitValueSegment(ctx, (ExpressionSegment) visit(ctx.aExpr()));
+    }
+    
+    private LimitValueSegment createLimitValueSegment(final ParserRuleContext ctx, final ExpressionSegment segment) {
+        if (segment instanceof ParameterMarkerExpressionSegment) {
+            return new ParameterMarkerLimitValueSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), ((ParameterMarkerExpressionSegment) segment).getParameterMarkerIndex());
+        }
+        if (segment instanceof TypeCastExpression) {
+            return createLimitValueSegment(ctx, ((TypeCastExpression) segment).getExpression());
+        }
+        if (segment instanceof LiteralExpressionSegment) {
+            Object literals = ((LiteralExpressionSegment) segment).getLiterals();
+            if (null == literals) {
+                return ctx instanceof SelectOffsetValueContext ? new NumberLiteralLimitValueSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), 0L) : null;
+            }
+            return new NumberLiteralLimitValueSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), Long.parseLong(literals.toString()));
+        }
+        return new ExpressionLimitValueSegment(ctx.start.getStartIndex(), ctx.stop.getStopIndex(), segment);
+    }
+    
+    private LimitSegment createLimitSegmentWhenLimitAndOffset(final SelectLimitContext ctx) {
+        ParseTree astNode0 = ctx.getChild(0);
+        LimitValueSegment rowCount = null;
+        LimitValueSegment offset = null;
+        if (astNode0 instanceof LimitClauseContext) {
+            rowCount = createRowCountValueSegment(ctx.limitClause());
+        } else {
+            offset = (LimitValueSegment) visit(ctx.offsetClause().selectOffsetValue());
+        }
+        ParseTree astNode1 = ctx.getChild(1);
+        if (astNode1 instanceof LimitClauseContext) {
+            rowCount = createRowCountValueSegment(ctx.limitClause());
+        } else {
+            offset = (LimitValueSegment) visit(ctx.offsetClause().selectOffsetValue());
+        }
+        return new LimitSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), offset, rowCount);
+    }
+    
+    private LimitValueSegment createRowCountValueSegment(final LimitClauseContext ctx) {
+        if (null != ctx.selectFetchValue()) {
+            return (LimitValueSegment) visit(ctx.selectFetchValue());
+        }
+        if (null != ctx.selectLimitValue()) {
+            return (LimitValueSegment) visit(ctx.selectLimitValue());
+        }
+        int startIndex = ctx.rowOrRows().start.getStartIndex();
+        return new NumberLiteralLimitValueSegment(startIndex, startIndex - 1, 1L);
+    }
+    
+    private LimitSegment createLimitSegmentWhenRowCountOrOffsetAbsent(final SelectLimitContext ctx) {
+        if (null != ctx.limitClause()) {
+            return new LimitSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), null, createRowCountValueSegment(ctx.limitClause()));
+        }
+        LimitValueSegment offset = (LimitValueSegment) visit(ctx.offsetClause().selectOffsetValue());
+        return new LimitSegment(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), offset, null);
+    }
+    
+    private SelectStatement.SelectStatementBuilder createSelectStatementBuilder(final SelectStatement selectStatement) {
+        return SelectStatement.builder().databaseType(selectStatement.getDatabaseType()).projections(selectStatement.getProjections())
+                .from(selectStatement.getFrom().orElse(null)).where(selectStatement.getWhere().orElse(null))
+                .hierarchicalQuery(selectStatement.getHierarchicalQuery().orElse(null)).groupBy(selectStatement.getGroupBy().orElse(null))
+                .having(selectStatement.getHaving().orElse(null)).orderBy(selectStatement.getOrderBy().orElse(null))
+                .combine(selectStatement.getCombine().orElse(null)).with(selectStatement.getWith().orElse(null))
+                .subqueryType(selectStatement.getSubqueryType().orElse(null)).limit(selectStatement.getLimit().orElse(null))
+                .lock(selectStatement.getLock().orElse(null)).window(selectStatement.getWindow().orElse(null))
+                .into(selectStatement.getInto().orElse(null)).model(selectStatement.getModel().orElse(null))
+                .outfile(selectStatement.getOutfile().orElse(null)).withTableHint(selectStatement.getWithTableHint().orElse(null));
+    }
+    
+    @Override
+    public ASTNode visitExecuteStmt(final ExecuteStmtContext ctx) {
+        return new ExecuteStatement(databaseType);
+    }
+    
+    /**
+     * Get original text.
+     *
+     * @param ctx context
+     * @return original text
+     */
+    protected String getOriginalText(final ParserRuleContext ctx) {
+        return ctx.start.getInputStream().getText(new Interval(ctx.start.getStartIndex(), ctx.stop.getStopIndex()));
+    }
+    
+    @Override
+    @SuppressWarnings("unchecked")
+    public ASTNode visitAnyName(final AnyNameContext ctx) {
+        CollectionValue<NameSegment> result = new CollectionValue<>();
+        if (null != ctx.attrs()) {
+            result.combine((CollectionValue<NameSegment>) visit(ctx.attrs()));
+        }
+        result.getValue().add(new NameSegment(ctx.colId().getStart().getStartIndex(), ctx.colId().getStop().getStopIndex(), createIdentifierValue(ctx.colId().getText())));
+        return result;
+    }
+    
+    @Override
+    @SuppressWarnings("unchecked")
+    public ASTNode visitAttrs(final AttrsContext ctx) {
+        CollectionValue<NameSegment> result = new CollectionValue<>();
+        result.getValue().add(new NameSegment(ctx.attrName().getStart().getStartIndex(), ctx.attrName().getStop().getStopIndex(), createIdentifierValue(ctx.attrName().getText())));
+        if (null != ctx.attrs()) {
+            result.combine((CollectionValue<NameSegment>) visit(ctx.attrs()));
+        }
+        return result;
+    }
+    
+    @Override
+    public ASTNode visitName(final NameContext ctx) {
+        return visit(ctx.identifier());
+    }
+    
+    @Override
+    public ASTNode visitHostVariable(final HostVariableContext ctx) {
+        return visit(ctx.identifier());
+    }
+    
+    @Override
+    public ASTNode visitSignedIconst(final SignedIconstContext ctx) {
+        return new NumberLiteralValue(ctx.getText().replace("_", ""));
+    }
+}

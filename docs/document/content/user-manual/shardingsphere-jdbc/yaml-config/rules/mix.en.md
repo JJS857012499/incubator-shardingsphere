@@ -1,66 +1,130 @@
 +++
 title = "Mixed Rules"
-weight = 6
+weight = 10
 +++
 
+## Background
 
-The overlay between rule items in a mixed configuration is associated by the data source name and the table name.
+ShardingSphere provides a variety of features, such as data sharding, read/write splitting, and data encryption. These features can be used independently or in combination. 
+Below, you will find the parameters' explanation and configuration samples based on YAML.
 
-If the previous rule is aggregation-oriented, the next rule needs to use the aggregated logical data source name configured by the previous rule when configuring the data source.
-Similarly, if the previous rule is table aggregation-oriented, the next rule needs to use the aggregated logical table name configured by the previous rule when configuring the table.
+## Parameters
 
-## Configuration Item Explanation
-
-```yml
-dataSources: # Configure the real data source name.
-  write_ds:
-    # ...Omit specific configuration.
-  read_ds_0:
-    # ...Omit specific configuration.
-  read_ds_1:
-    # ...Omit specific configuration.
-
+```yaml
 rules:
-  - !SHARDING # Configure data sharding rules.
-    tables:
-      t_user:
-        actualDataNodes: ds.t_user_${0..1} # Data source name 'ds' uses the logical data source name of the readwrite-splitting configuration.
-        tableStrategy:
-          standard:
-            shardingColumn: user_id
-            shardingAlgorithmName: t_user_inline
-    shardingAlgorithms:
-      t_user_inline:
-        type: INLINE
-        props:
-          algorithm-expression: t_user_${user_id % 2}
-  
-  - !ENCRYPT # Configure data encryption rules.
-    tables:
-      t_user: # Table `t_user` is the name of the logical table that uses the data sharding configuration.
-        columns:
-          pwd:
-            plainColumn: plain_pwd
-            cipherColumn: cipher_pwd
-            encryptorName: encryptor_aes
-    encryptors:
-      encryptor_aes:
-        type: aes
-        props:
-          aes-key-value: 123456abc
-  
-  - !READWRITE_SPLITTING # Configure readwrite-splitting rules.
-    dataSources:
-      ds: # The logical data source name 'ds' for readwrite-splitting is used in data sharding.
-        writeDataSourceName: write_ds # Use the real data source name 'write_ds'.
-        readDataSourceNames:
-          - read_ds_0 # Use the real data source name 'read_ds_0'.
-          - read_ds_1 # Use the real data source name 'read_ds_1'.
-        loadBalancerName: roundRobin
-    loadBalancers:
-      roundRobin:
-        type: ROUND_ROBIN
+- !SHARDING
+  tables:
+    <logic_table_name>: # Logical table name:
+      actualDataNodes: # consists of logical data source name plus table name (refer to Inline syntax rules)
+      tableStrategy: # Table shards strategy. The same as database shards strategy
+        standard:
+          shardingColumn: # Sharding column name
+          shardingAlgorithmName: # Sharding algorithm name
+  defaultDatabaseStrategy:
+    standard:
+      shardingColumn: # Sharding column name
+      shardingAlgorithmName: # Sharding algorithm name
+  keyGenerateStrategies:
+    <key_generate_strategy_name> (+): # Sharding key generate strategy name
+      keyGenerateType: # Sharding key generate strategy type
+      keyGeneratorName: # Distributed sequence algorithm name
+      logicTable: # Logic table name, required when keyGenerateType is column
+      keyGenerateColumn: # Auto-increment column name, required when keyGenerateType is column
+      keyGenerateSequence: # Sequence name, required when keyGenerateType is sequence
+  shardingAlgorithms:
+    <sharding_algorithm_name>: # Sharding algorithm name
+      type: INLINE
+      props:
+        algorithm-expression: # INLINE expression
+    t_order_inline:
+      type: INLINE
+      props:
+        algorithm-expression: # INLINE expression
+  keyGenerators:
+    <key_generate_algorithm_name> (+): # Distributed sequence algorithm name
+      type: # Distributed sequence algorithm type
+      props: # Property configuration of distributed sequence algorithm
+- !ENCRYPT
+  encryptors:
+    <encrypt_algorithm_name> (+): # Encryption and decryption algorithm name
+      type: # Encryption and decryption algorithm type
+      props: # Encryption and decryption algorithm property configuration
+    <encrypt_algorithm_name> (+): # Encryption and decryption algorithm name
+      type: # Encryption and decryption algorithm type
+  tables:
+    <table_name>: # Encryption table name
+      columns:
+        <column_name> (+): # Encrypt logic column name
+          cipher:
+            name: # Cipher column name
+            encryptorName: # Cipher encrypt algorithm name
+          assistedQuery (?):
+            name: # Assisted query column name
+            encryptorName:  # Assisted query encrypt algorithm name
+          likeQuery (?):
+            name: # Like query column name
+            encryptorName:  # Like query encrypt algorithm name 
+```
 
-props:
-  sql-show: true
+## Samples
+
+```yaml
+rules:
+- !SHARDING
+  tables:
+    t_order:
+      actualDataNodes: replica_ds_${0..1}.t_order_${0..1}
+      tableStrategy:
+        standard:
+          shardingColumn: order_id
+          shardingAlgorithmName: t_order_inline
+  defaultDatabaseStrategy:
+    standard:
+      shardingColumn: user_id
+      shardingAlgorithmName: database_inline
+  keyGenerateStrategies:
+    t_order_order_id:
+      keyGenerateType: column
+      keyGeneratorName: snowflake
+      logicTable: t_order
+      keyGenerateColumn: order_id
+  shardingAlgorithms:
+    database_inline:
+      type: INLINE
+      props:
+        algorithm-expression: replica_ds_${user_id % 2}
+    t_order_inline:
+      type: INLINE
+      props:
+        algorithm-expression: t_order_${order_id % 2}
+    t_order_item_inline:
+      type: INLINE
+      props:
+        algorithm-expression: t_order_item_${order_id % 2}
+  keyGenerators:
+    snowflake:
+      type: SNOWFLAKE
+- !ENCRYPT
+  encryptors:
+    aes_encryptor:
+      type: AES
+      props:
+        aes-key-value: 123456abc
+        digest-algorithm-name: SHA-1
+    assisted_encryptor:
+      type: MD5
+  tables:
+    t_encrypt:
+      columns:
+        user_id:
+          cipher:
+            name: user_cipher
+            encryptorName: aes_encryptor
+          assistedQuery:
+            name: assisted_query_user
+            encryptorName: assisted_encryptor
+        order_id:
+          cipher:
+            name: order_cipher
+            encryptorName: aes_encryptor
 ```

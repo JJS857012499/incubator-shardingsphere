@@ -1,5 +1,5 @@
 +++
-pre = "<b>5.2. </b>"
+pre = "<b>4.2. </b>"
 title = "ShardingSphere-Proxy"
 weight = 2
 chapter = true
@@ -15,5 +15,3 @@ By configuration, application developers can flexibly use data sharding, readwri
 
 Rule configuration keeps consist with YAML configuration of ShardingSphere-JDBC.
 DistSQL and YAML can be replaced each other.
-
-Please refer to [Example](https://github.com/apache/shardingsphere/tree/master/examples/shardingsphere-proxy-example) for more details.

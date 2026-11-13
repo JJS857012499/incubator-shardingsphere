@@ -10,7 +10,7 @@ chapter = true
 
 而对于 ShardingSphere 元数据的加载过程，首先需要弄清楚在 ShardingSphere 中元数据的类型以及分级。在 ShardingSphere 中元数据主要围绕着 `ShardingSphereMetaData` 来进行展开，其中较为核心的是 `ShardingSphereSchema`。该结构是数据库的元数据，同时也为数据源元数据的顶层对象，在 ShardingSphere 中数据库元数据的结构如下图。对于每一层来说，上层数据来源于下层数据的组装，所以下面我们采用从下往上的分层方式进行逐一剖析。
 
-![](../../static/img/Blog_17_img_1_a.png)
+![](https://shardingsphere.apache.org/blog/img/Blog_17_img_1_a.png)
 
 **二、ColumMetaData 和 IndexMetaData**
 
@@ -147,7 +147,7 @@ public final class ShardingSphereSchema {
         tables.forEach((key, value) -> this.tables.put(key.toLowerCase(), value));
     }
 ~~~
-和 schema 的概念契合，一个 shcema 含有若干个表。`ShardingSphereSchema` 的属性是一个 map 结构，key 为 `tableName`，value 是表名对应表的元数据。主要是通过构造函数完成初始化。所以，还是重点对于表元数据的加载，下面我们从入口跟进。
+和 schema 的概念契合，一个 schema 含有若干个表。`ShardingSphereSchema` 的属性是一个 map 结构，key 为 `tableName`，value 是表名对应表的元数据。主要是通过构造函数完成初始化。所以，还是重点对于表元数据的加载，下面我们从入口跟进。
 
 整个元数据加载的核心入口在 `org.apache.shardingsphere.infra.context.metadata.MetaDataContextsBuilder#build` 中。在 build 中主要是通过配置的规则，组装和加载相对应的元数据，核心代码如下：
 

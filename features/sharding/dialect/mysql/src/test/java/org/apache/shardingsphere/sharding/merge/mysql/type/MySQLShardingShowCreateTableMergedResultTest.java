@@ -1,0 +1,281 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.sharding.merge.mysql.type;
+
+import org.apache.shardingsphere.database.connector.core.type.DatabaseType;
+import org.apache.shardingsphere.infra.binder.context.statement.SQLStatementContext;
+import org.apache.shardingsphere.infra.datanode.DataNode;
+import org.apache.shardingsphere.infra.executor.sql.execute.result.query.QueryResult;
+import org.apache.shardingsphere.infra.instance.ComputeNodeInstanceContext;
+import org.apache.shardingsphere.infra.metadata.database.schema.model.ShardingSphereConstraint;
+import org.apache.shardingsphere.infra.metadata.database.schema.model.ShardingSphereIndex;
+import org.apache.shardingsphere.infra.metadata.database.schema.model.ShardingSphereSchema;
+import org.apache.shardingsphere.infra.metadata.database.schema.model.ShardingSphereTable;
+import org.apache.shardingsphere.infra.metadata.database.schema.util.IndexMetaDataUtils;
+import org.apache.shardingsphere.sharding.api.config.ShardingRuleConfiguration;
+import org.apache.shardingsphere.sharding.api.config.rule.ShardingTableRuleConfiguration;
+import org.apache.shardingsphere.sharding.rule.BindingTableRule;
+import org.apache.shardingsphere.sharding.rule.ShardingRule;
+import org.apache.shardingsphere.sharding.rule.ShardingTable;
+import org.apache.shardingsphere.test.infra.fixture.jdbc.MockedDataSource;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import javax.sql.DataSource;
+import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+class MySQLShardingShowCreateTableMergedResultTest {
+    
+    private ShardingRule rule;
+    
+    private ShardingSphereSchema schema;
+    
+    @BeforeEach
+    void setUp() {
+        rule = buildShardingRule();
+        schema = createSchema();
+    }
+    
+    private ShardingRule buildShardingRule() {
+        ShardingRuleConfiguration shardingRuleConfig = new ShardingRuleConfiguration();
+        shardingRuleConfig.getTables().add(new ShardingTableRuleConfiguration("foo_tbl", "ds.foo_tbl_${0..2}"));
+        shardingRuleConfig.getTables().add(new ShardingTableRuleConfiguration("bar_tbl", "ds.bar_tbl_${0..2}"));
+        return new ShardingRule(shardingRuleConfig, Collections.singletonMap("ds", new MockedDataSource()), mock(ComputeNodeInstanceContext.class), Collections.emptyList());
+    }
+    
+    private ShardingSphereSchema createSchema() {
+        Collection<ShardingSphereTable> tables = new LinkedList<>();
+        tables.add(new ShardingSphereTable("foo_tbl", Collections.emptyList(), Collections.emptyList(), Collections.singleton(new ShardingSphereConstraint("foo_tbl_foreign_key", "bar_tbl"))));
+        tables.add(new ShardingSphereTable("bar_tbl", Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
+        return new ShardingSphereSchema("foo_db", mock(DatabaseType.class), tables, Collections.emptyList());
+    }
+    
+    private SQLStatementContext mockSQLStatementContext(final String... tableNames) {
+        SQLStatementContext result = mock(SQLStatementContext.class, RETURNS_DEEP_STUBS);
+        when(result.getTablesContext().getTableNames()).thenReturn(Arrays.asList(tableNames));
+        return result;
+    }
+    
+    @Test
+    void assertNextForEmptyQueryResult() throws SQLException {
+        assertFalse(new MySQLShardingShowCreateTableMergedResult(rule, mockSQLStatementContext("foo_tbl"), schema, Collections.emptyList()).next());
+    }
+    
+    @Test
+    void assertNextWithTableRule() throws SQLException {
+        assertTrue(new MySQLShardingShowCreateTableMergedResult(rule, mockSQLStatementContext("foo_tbl"), schema, Collections.singletonList(mockQueryResultWithTableRule())).next());
+    }
+    
+    @Test
+    void assertGetValueWithTableRule() throws SQLException {
+        MySQLShardingShowCreateTableMergedResult actual = new MySQLShardingShowCreateTableMergedResult(
+                rule, mockSQLStatementContext("foo_tbl"), schema, Collections.singletonList(mockQueryResultWithTableRule()));
+        assertTrue(actual.next());
+        assertThat(actual.getValue(1, String.class), is("foo_tbl"));
+        assertThat(actual.getValue(2, String.class), is("CREATE TABLE `foo_tbl` (\n"
+                + "  `id` int(11) NOT NULL AUTO_INCREMENT,\n"
+                + "  `foo_id` int(11) NOT NULL COMMENT,\n"
+                + "  `bar_id` int(11) NOT NULL COMMENT,\n"
+                + "  `status` tinyint(4) NOT NULL DEFAULT '1',\n"
+                + "  `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n"
+                + "  PRIMARY KEY (`id`),\n"
+                + "  CONSTRAINT `foo_tbl_foreign_key` FOREIGN KEY (`bar_id`) REFERENCES `bar_tbl` (`bar_id`) \n"
+                + ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin"));
+    }
+    
+    private QueryResult mockQueryResultWithTableRule() throws SQLException {
+        QueryResult result = mock(QueryResult.class, RETURNS_DEEP_STUBS);
+        when(result.getMetaData().getColumnCount()).thenReturn(2);
+        when(result.next()).thenReturn(true, false);
+        when(result.getValue(1, Object.class)).thenReturn("foo_tbl_0");
+        when(result.getValue(2, Object.class)).thenReturn("CREATE TABLE `foo_tbl_0` (\n"
+                + "  `id` int(11) NOT NULL AUTO_INCREMENT,\n"
+                + "  `foo_id` int(11) NOT NULL COMMENT,\n"
+                + "  `bar_id` int(11) NOT NULL COMMENT,\n"
+                + "  `status` tinyint(4) NOT NULL DEFAULT '1',\n"
+                + "  `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n"
+                + "  PRIMARY KEY (`id`),\n"
+                + "  CONSTRAINT `foo_tbl_foreign_key_foo_tbl_0` FOREIGN KEY (`bar_id`) REFERENCES `bar_tbl_0` (`bar_id`) \n"
+                + ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin");
+        return result;
+    }
+    
+    @Test
+    void assertGetValueWithDollarSignInTableNames() throws SQLException {
+        MySQLShardingShowCreateTableMergedResult actual = new MySQLShardingShowCreateTableMergedResult(
+                buildShardingRuleWithDollarSign(), mockSQLStatementContext("foo$tbl"), createSchemaWithDollarSign(), Collections.singletonList(mockQueryResultWithDollarSign()));
+        assertTrue(actual.next());
+        assertThat(actual.getValue(2, String.class), is("CREATE TABLE `foo$tbl` (FOREIGN KEY (`bar_id`) REFERENCES `bar$tbl` (`bar_id`))"));
+    }
+    
+    private ShardingRule buildShardingRuleWithDollarSign() {
+        ShardingRule result = mock(ShardingRule.class);
+        ShardingTable shardingTable = mock(ShardingTable.class);
+        when(shardingTable.getLogicTable()).thenReturn("foo$tbl");
+        when(shardingTable.getActualDataNodes()).thenReturn(Collections.singletonList(new DataNode("ds.foo$tbl_0")));
+        when(result.findShardingTableByActualTable("foo$tbl_0")).thenReturn(Optional.of(shardingTable));
+        when(result.findShardingTable("foo$tbl")).thenReturn(Optional.of(shardingTable));
+        BindingTableRule bindingTableRule = mock(BindingTableRule.class);
+        when(bindingTableRule.getAllLogicTables()).thenReturn(Collections.singleton("bar$tbl"));
+        when(result.findBindingTableRule("foo$tbl")).thenReturn(Optional.of(bindingTableRule));
+        when(result.getLogicAndActualTablesFromBindingTable("ds", "foo$tbl", "foo$tbl_0", Collections.singleton("bar$tbl")))
+                .thenReturn(Collections.singletonMap("bar$tbl", "bar$tbl_0"));
+        return result;
+    }
+    
+    private ShardingSphereSchema createSchemaWithDollarSign() {
+        Collection<ShardingSphereTable> tables = new LinkedList<>();
+        tables.add(new ShardingSphereTable("foo$tbl", Collections.emptyList(), Collections.emptyList(), Collections.singleton(new ShardingSphereConstraint("foo_foreign_key", "bar$tbl"))));
+        tables.add(new ShardingSphereTable("bar$tbl", Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
+        return new ShardingSphereSchema("foo_db", mock(DatabaseType.class), tables, Collections.emptyList());
+    }
+    
+    private QueryResult mockQueryResultWithDollarSign() throws SQLException {
+        QueryResult result = mock(QueryResult.class, RETURNS_DEEP_STUBS);
+        when(result.getMetaData().getColumnCount()).thenReturn(2);
+        when(result.next()).thenReturn(true, false);
+        when(result.getValue(1, Object.class)).thenReturn("foo$tbl_0");
+        when(result.getValue(2, Object.class)).thenReturn("CREATE TABLE `foo$tbl_0` (FOREIGN KEY (`bar_id`) REFERENCES `bar$tbl_0` (`bar_id`))");
+        return result;
+    }
+    
+    @Test
+    void assertGetValueWithSameActualTableNameInDifferentStorageUnits() throws SQLException {
+        MySQLShardingShowCreateTableMergedResult actual = new MySQLShardingShowCreateTableMergedResult(buildShardingRuleWithSameActualTableName(),
+                mockSQLStatementContext("t_order1"), createSchemaWithSameActualTableName(), Collections.singletonList(mockQueryResultWithSameActualTableName()));
+        assertTrue(actual.next());
+        assertThat(actual.getValue(1, String.class), is("t_order1"));
+        assertThat(actual.getValue(2, String.class), is("CREATE TABLE `t_order1` (`id` int(11) NOT NULL)"));
+    }
+    
+    private ShardingRule buildShardingRuleWithSameActualTableName() {
+        ShardingRuleConfiguration shardingRuleConfig = new ShardingRuleConfiguration();
+        shardingRuleConfig.getTables().add(new ShardingTableRuleConfiguration("t_order0", "ds_0.t_order"));
+        shardingRuleConfig.getTables().add(new ShardingTableRuleConfiguration("t_order1", "ds_1.t_order"));
+        Map<String, DataSource> dataSources = new HashMap<>(2, 1F);
+        dataSources.put("ds_0", new MockedDataSource());
+        dataSources.put("ds_1", new MockedDataSource());
+        return new ShardingRule(shardingRuleConfig, dataSources, mock(ComputeNodeInstanceContext.class), Collections.emptyList());
+    }
+    
+    private ShardingSphereSchema createSchemaWithSameActualTableName() {
+        Collection<ShardingSphereTable> tables = new LinkedList<>();
+        tables.add(new ShardingSphereTable("t_order0", Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
+        tables.add(new ShardingSphereTable("t_order1", Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
+        return new ShardingSphereSchema("foo_db", mock(DatabaseType.class), tables, Collections.emptyList());
+    }
+    
+    private QueryResult mockQueryResultWithSameActualTableName() throws SQLException {
+        QueryResult result = mock(QueryResult.class, RETURNS_DEEP_STUBS);
+        when(result.getMetaData().getColumnCount()).thenReturn(2);
+        when(result.next()).thenReturn(true, false);
+        when(result.getValue(1, Object.class)).thenReturn("t_order");
+        when(result.getValue(2, Object.class)).thenReturn("CREATE TABLE `t_order` (`id` int(11) NOT NULL)");
+        return result;
+    }
+    
+    @Test
+    void assertGetValueWithoutTableRule() throws SQLException {
+        MySQLShardingShowCreateTableMergedResult actual = new MySQLShardingShowCreateTableMergedResult(
+                mock(ShardingRule.class, RETURNS_DEEP_STUBS), mockSQLStatementContext("foo_tbl"), schema, Collections.singletonList(mockQueryResultWithoutTableRule()));
+        assertTrue(actual.next());
+        assertThat(actual.getValue(1, String.class), is("foo_tbl"));
+        assertThat(actual.getValue(2, String.class), is("CREATE TABLE `foo_tbl` (\n"
+                + "  `id` int(11) NOT NULL AUTO_INCREMENT,\n"
+                + "  `foo_id` int(11) NOT NULL COMMENT,\n"
+                + "  `bar_id` int(11) NOT NULL COMMENT,\n"
+                + "  `status` tinyint(4) NOT NULL DEFAULT '1',\n"
+                + "  `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n"
+                + "  PRIMARY KEY (`id`),\n"
+                + "  CONSTRAINT `foo_tbl_foreign_key` FOREIGN KEY (`bar_id`) REFERENCES `bar_tbl` (`bar_id`) \n"
+                + ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin"));
+    }
+    
+    @Test
+    void assertGetValueWithLegacyIndexName() throws SQLException {
+        MySQLShardingShowCreateTableMergedResult actual = new MySQLShardingShowCreateTableMergedResult(
+                rule, mockSQLStatementContext("foo_tbl"), createSchemaWithIndex(),
+                Collections.singletonList(mockQueryResultWithIndex(IndexMetaDataUtils.getLegacyActualIndexName("foo_idx", "foo_tbl_0"))));
+        assertTrue(actual.next());
+        assertThat(actual.getValue(2, String.class), is("CREATE TABLE `foo_tbl` (\n"
+                + "  `id` int(11) NOT NULL,\n"
+                + "  KEY `foo_idx` (`id`)\n"
+                + ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin"));
+    }
+    
+    @Test
+    void assertGetValueWithShortenedIndexName() throws SQLException {
+        MySQLShardingShowCreateTableMergedResult actual = new MySQLShardingShowCreateTableMergedResult(
+                rule, mockSQLStatementContext("foo_tbl"), createSchemaWithIndex(), Collections.singletonList(mockQueryResultWithIndex(IndexMetaDataUtils.getActualIndexName("foo_idx", "foo_tbl_0"))));
+        assertTrue(actual.next());
+        assertThat(actual.getValue(2, String.class), is("CREATE TABLE `foo_tbl` (\n"
+                + "  `id` int(11) NOT NULL,\n"
+                + "  KEY `foo_idx` (`id`)\n"
+                + ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin"));
+    }
+    
+    private QueryResult mockQueryResultWithoutTableRule() throws SQLException {
+        QueryResult result = mock(QueryResult.class, RETURNS_DEEP_STUBS);
+        when(result.getMetaData().getColumnCount()).thenReturn(2);
+        when(result.next()).thenReturn(true, false);
+        when(result.getValue(1, Object.class)).thenReturn("foo_tbl");
+        when(result.getValue(2, Object.class)).thenReturn("CREATE TABLE `foo_tbl` (\n"
+                + "  `id` int(11) NOT NULL AUTO_INCREMENT,\n"
+                + "  `foo_id` int(11) NOT NULL COMMENT,\n"
+                + "  `bar_id` int(11) NOT NULL COMMENT,\n"
+                + "  `status` tinyint(4) NOT NULL DEFAULT '1',\n"
+                + "  `created_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n"
+                + "  PRIMARY KEY (`id`),\n"
+                + "  CONSTRAINT `foo_tbl_foreign_key` FOREIGN KEY (`bar_id`) REFERENCES `bar_tbl` (`bar_id`) \n"
+                + ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin");
+        return result;
+    }
+    
+    private ShardingSphereSchema createSchemaWithIndex() {
+        ShardingSphereTable table =
+                new ShardingSphereTable("foo_tbl", Collections.emptyList(), Collections.singleton(new ShardingSphereIndex("foo_idx", Collections.emptyList(), false)), Collections.emptyList());
+        return new ShardingSphereSchema("foo_db", mock(DatabaseType.class), Collections.singleton(table), Collections.emptyList());
+    }
+    
+    private QueryResult mockQueryResultWithIndex(final String actualIndexName) throws SQLException {
+        QueryResult result = mock(QueryResult.class, RETURNS_DEEP_STUBS);
+        when(result.getMetaData().getColumnCount()).thenReturn(2);
+        when(result.next()).thenReturn(true, false);
+        when(result.getValue(1, Object.class)).thenReturn("foo_tbl_0");
+        when(result.getValue(2, Object.class)).thenReturn("CREATE TABLE `foo_tbl_0` (\n"
+                + "  `id` int(11) NOT NULL,\n"
+                + "  KEY `" + actualIndexName + "` (`id`)\n"
+                + ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin");
+        return result;
+    }
+}

@@ -1,0 +1,1969 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Licensed to the Apache Software Foundation (ASF) under one or more
+  ~ contributor license agreements.  See the NOTICE file distributed with
+  ~ this work for additional information regarding copyright ownership.
+  ~ The ASF licenses this file to You under the Apache License, Version 2.0
+  ~ (the "License"); you may not use this file except in compliance with
+  ~ the License.  You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<sql-parser-test-cases>
+    <select sql-case-id="hive_select_simple">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="14" stop-index="20" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_with_where">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="14" stop-index="20" />
+        </from>
+        <where start-index="22" stop-index="39">
+            <expr>
+                <binary-operation-expression start-index="28" stop-index="39">
+                    <left>
+                        <column name="order_id" start-index="28" stop-index="35" />
+                    </left>
+                    <operator>=</operator>
+                    <right>
+                        <literal-expression value="1" start-index="39" stop-index="39" />
+                    </right>
+                </binary-operation-expression>
+            </expr>
+        </where>
+    </select>
+
+    <select sql-case-id="hive_select_group_by">
+        <projections start-index="7" stop-index="23">
+            <column-projection name="user_id" start-index="7" stop-index="13" />
+            <aggregation-projection type="COUNT" expression="(*)" start-index="16" stop-index="23" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="30" stop-index="36" />
+        </from>
+        <group-by>
+            <column-item name="user_id" start-index="47" stop-index="53" />
+        </group-by>
+    </select>
+
+    <select sql-case-id="hive_select_having">
+        <projections start-index="7" stop-index="23">
+            <column-projection name="user_id" start-index="7" stop-index="13" />
+            <aggregation-projection type="COUNT" expression="(*)" start-index="16" stop-index="23" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="30" stop-index="36" />
+        </from>
+        <group-by>
+            <column-item name="user_id" start-index="47" stop-index="53" />
+        </group-by>
+        <having start-index="55" stop-index="73">
+            <expr>
+                <binary-operation-expression start-index="62" stop-index="73">
+                    <left>
+                        <aggregation-projection type="COUNT" expression="(*)" start-index="62" stop-index="69" />
+                    </left>
+                    <operator>&gt;</operator>
+                    <right>
+                        <literal-expression value="1" start-index="73" stop-index="73" />
+                    </right>
+                </binary-operation-expression>
+            </expr>
+        </having>
+    </select>
+
+    <select sql-case-id="hive_select_order_by">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="14" stop-index="20" />
+        </from>
+        <order-by>
+            <column-item name="order_id" order-direction="DESC" start-index="31" stop-index="38" />
+        </order-by>
+    </select>
+
+    <select sql-case-id="hive_select_limit">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="14" stop-index="20" />
+        </from>
+        <limit start-index="22" stop-index="29">
+            <row-count value="10" start-index="28" stop-index="29" />
+        </limit>
+    </select>
+
+    <select sql-case-id="hive_select_limit_offset">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="14" stop-index="20" />
+        </from>
+        <limit start-index="22" stop-index="38">
+            <row-count value="10" start-index="28" stop-index="29" />
+            <offset value="5" start-index="38" stop-index="38" />
+        </limit>
+    </select>
+
+    <select sql-case-id="hive_select_join">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+             <join-table join-type="INNER" start-index="14" stop-index="63">
+                <left>
+                    <simple-table name="t_order" alias="o" start-index="14" stop-index="22" />
+                </left>
+                <right>
+                    <simple-table name="t_item" alias="i" start-index="29" stop-index="36" />
+                </right>
+                <on-condition start-index="41" stop-index="63">
+                     <binary-operation-expression start-index="41" stop-index="63">
+                        <left>
+                            <column name="order_id" start-index="41" stop-index="50">
+                                <owner name="o" start-index="41" stop-index="41" />
+                            </column>
+                        </left>
+                        <operator>=</operator>
+                        <right>
+                            <column name="order_id" start-index="54" stop-index="63">
+                                <owner name="i" start-index="54" stop-index="54" />
+                            </column>
+                        </right>
+                     </binary-operation-expression>
+                </on-condition>
+            </join-table>
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_left_join">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+             <join-table join-type="LEFT" start-index="14" stop-index="68">
+                <left>
+                    <simple-table name="t_order" alias="o" start-index="14" stop-index="22" />
+                </left>
+                <right>
+                    <simple-table name="t_item" alias="i" start-index="34" stop-index="41" />
+                </right>
+                <on-condition start-index="46" stop-index="68">
+                     <binary-operation-expression start-index="46" stop-index="68">
+                        <left>
+                            <column name="order_id" start-index="46" stop-index="55">
+                                <owner name="o" start-index="46" stop-index="46" />
+                            </column>
+                        </left>
+                        <operator>=</operator>
+                        <right>
+                            <column name="order_id" start-index="59" stop-index="68">
+                                <owner name="i" start-index="59" stop-index="59" />
+                            </column>
+                        </right>
+                     </binary-operation-expression>
+                </on-condition>
+            </join-table>
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_right_join">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+             <join-table join-type="RIGHT" start-index="14" stop-index="69">
+                <left>
+                    <simple-table name="t_order" alias="o" start-index="14" stop-index="22" />
+                </left>
+                <right>
+                    <simple-table name="t_item" alias="i" start-index="35" stop-index="42" />
+                </right>
+                <on-condition start-index="47" stop-index="69">
+                     <binary-operation-expression start-index="47" stop-index="69">
+                        <left>
+                            <column name="order_id" start-index="47" stop-index="56">
+                                <owner name="o" start-index="47" stop-index="47" />
+                            </column>
+                        </left>
+                        <operator>=</operator>
+                        <right>
+                            <column name="order_id" start-index="60" stop-index="69">
+                                <owner name="i" start-index="60" stop-index="60" />
+                            </column>
+                        </right>
+                     </binary-operation-expression>
+                </on-condition>
+            </join-table>
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_cross_join">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+             <join-table join-type="INNER" start-index="14" stop-index="29">
+                <left>
+                    <simple-table name="t1" start-index="14" stop-index="15" />
+                </left>
+                <right>
+                    <simple-table name="t2" start-index="28" stop-index="29" />
+                </right>
+            </join-table>
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_union">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t1" start-index="14" stop-index="15" />
+        </from>
+        <combine combine-type="UNION" start-index="17" stop-index="38">
+            <left>
+                <projections start-index="7" stop-index="7">
+                    <shorthand-projection start-index="7" stop-index="7" />
+                </projections>
+                <from>
+                    <simple-table name="t1" start-index="14" stop-index="15" />
+                </from>
+            </left>
+            <right>
+                <projections start-index="30" stop-index="30">
+                    <shorthand-projection start-index="30" stop-index="30" />
+                </projections>
+                <from>
+                    <simple-table name="t2" start-index="37" stop-index="38" />
+                </from>
+            </right>
+        </combine>
+    </select>
+
+    <select sql-case-id="hive_select_union_all">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+             <simple-table name="t1" start-index="14" stop-index="15" />
+        </from>
+        <combine combine-type="UNION_ALL" start-index="17" stop-index="42">
+            <left>
+                 <projections start-index="7" stop-index="7">
+                    <shorthand-projection start-index="7" stop-index="7" />
+                </projections>
+                <from>
+                    <simple-table name="t1" start-index="14" stop-index="15" />
+                </from>
+            </left>
+            <right>
+                 <projections start-index="34" stop-index="34">
+                    <shorthand-projection start-index="34" stop-index="34" />
+                </projections>
+                <from>
+                    <simple-table name="t2" start-index="41" stop-index="42" />
+                </from>
+            </right>
+        </combine>
+    </select>
+
+    <select sql-case-id="hive_select_distinct">
+        <projections start-index="16" stop-index="22" distinct-row="true">
+            <column-projection name="user_id" start-index="16" stop-index="22" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="29" stop-index="35" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_window">
+        <!-- SELECT user_id, RANK() OVER (PARTITION BY city ORDER BY salary DESC) FROM t_employee -->
+        <projections start-index="7" stop-index="67">
+            <column-projection name="user_id" start-index="7" stop-index="13" />
+            <expression-projection text="RANK() OVER (PARTITION BY city ORDER BY salary DESC)" start-index="16" stop-index="67"/>
+        </projections>
+        <from>
+            <simple-table name="t_employee" start-index="74" stop-index="83" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_subquery">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <subquery-table alias="t" start-index="14" stop-index="38">
+                <subquery start-index="14" stop-index="38">
+                    <select>
+                        <projections start-index="22" stop-index="22">
+                            <shorthand-projection start-index="22" stop-index="22" />
+                        </projections>
+                        <from>
+                            <simple-table name="t_order" start-index="29" stop-index="35" />
+                        </from>
+                    </select>
+                </subquery>
+            </subquery-table>
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_substring">
+        <projections start-index="7" stop-index="28">
+            <expression-projection text="SUBSTRING('abc', 1, 2)" start-index="7" stop-index="28">
+                <expr>
+                    <function function-name="SUBSTRING" start-index="7" stop-index="28" text="SUBSTRING('abc', 1, 2)">
+                       <parameter>
+                           <literal-expression value="abc" start-index="17" stop-index="21" />
+                       </parameter>
+                       <parameter>
+                           <literal-expression value="1" start-index="24" stop-index="24" />
+                       </parameter>
+                       <parameter>
+                           <literal-expression value="2" start-index="27" stop-index="27" />
+                       </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_select_safe_eq">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_pred" start-index="14" stop-index="19" />
+        </from>
+        <where start-index="21" stop-index="33">
+            <expr>
+                <binary-operation-expression start-index="27" stop-index="33">
+                    <left>
+                        <column name="a" start-index="27" stop-index="27" />
+                    </left>
+                    <operator>&lt;=&gt;</operator>
+                    <right>
+                        <column name="b" start-index="33" stop-index="33" />
+                    </right>
+                </binary-operation-expression>
+            </expr>
+        </where>
+    </select>
+
+    <select sql-case-id="hive_select_sounds_like">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_pred" start-index="14" stop-index="19" />
+        </from>
+        <where start-index="21" stop-index="47">
+            <expr>
+                <binary-operation-expression start-index="27" stop-index="47">
+                    <left>
+                        <column name="col" start-index="27" stop-index="29" />
+                    </left>
+                    <operator>SOUNDS LIKE</operator>
+                    <right>
+                        <literal-expression value="abc" start-index="43" stop-index="47" />
+                    </right>
+                </binary-operation-expression>
+            </expr>
+        </where>
+    </select>
+
+    <select sql-case-id="hive_select_interval">
+        <projections start-index="7" stop-index="20">
+            <expression-projection text="INTERVAL" start-index="7" stop-index="14">
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_select_collate_literal">
+        <projections start-index="7" stop-index="22">
+            <expression-projection text="utf8" start-index="7" stop-index="22">
+                <expr>
+                    <collate-expression start-index="7" stop-index="22">
+                        <collate-name>
+                            <literal-expression value="utf8" start-index="11" stop-index="22" />
+                        </collate-name>
+                    </collate-expression>
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_select_binary_prefix">
+        <projections start-index="7" stop-index="16">
+            <expression-projection text="a" start-index="14" stop-index="16">
+                <expr>
+                    <literal-expression value="a" start-index="14" stop-index="16" />
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_select_three_part_column">
+        <projections start-index="7" stop-index="19">
+            <column-projection name="col1" start-index="7" stop-index="19">
+                <owner name="tbl1" start-index="11" stop-index="14">
+                    <owner name="db1" start-index="7" stop-index="9" />
+                </owner>
+            </column-projection>
+        </projections>
+        <from>
+            <simple-table name="tbl1" start-index="26" stop-index="33">
+                <owner name="db1" start-index="26" stop-index="28" />
+            </simple-table>
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_substr">
+        <projections start-index="7" stop-index="23">
+            <expression-projection text="SUBSTR('abc',1,2)" start-index="7" stop-index="23">
+                <expr>
+                    <function function-name="SUBSTR" start-index="7" stop-index="23" text="SUBSTR('abc',1,2)">
+                        <parameter>
+                            <literal-expression value="abc" start-index="14" stop-index="18" />
+                        </parameter>
+                        <parameter>
+                            <literal-expression value="1" start-index="20" stop-index="20" />
+                        </parameter>
+                        <parameter>
+                            <literal-expression value="2" start-index="22" stop-index="22" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_select_trim_leading">
+        <projections start-index="7" stop-index="34">
+            <expression-projection text="TRIM(LEADING 'x' FROM 'xxx')" start-index="7" stop-index="34">
+                <expr>
+                    <function function-name="TRIM" start-index="7" stop-index="34" text="TRIM(LEADING 'x' FROM 'xxx')">
+                        <parameter>
+                            <literal-expression value="LEADING" start-index="12" stop-index="18" />
+                        </parameter>
+                        <parameter>
+                            <literal-expression value="x" start-index="20" stop-index="22" />
+                        </parameter>
+                        <parameter>
+                            <literal-expression value="xxx" start-index="29" stop-index="33" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_select_trim_trailing">
+        <projections start-index="7" stop-index="35">
+            <expression-projection text="TRIM(TRAILING 'y' FROM 'yyy')" start-index="7" stop-index="35">
+                <expr>
+                    <function function-name="TRIM" start-index="7" stop-index="35" text="TRIM(TRAILING 'y' FROM 'yyy')">
+                        <parameter>
+                            <literal-expression value="TRAILING" start-index="12" stop-index="19" />
+                        </parameter>
+                        <parameter>
+                            <literal-expression value="y" start-index="21" stop-index="23" />
+                        </parameter>
+                        <parameter>
+                            <literal-expression value="yyy" start-index="30" stop-index="34" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_select_current_time_precision">
+        <projections start-index="7" stop-index="21">
+            <expression-projection text="CURRENT_TIME(3)" start-index="7" stop-index="21">
+                <expr>
+                    <function function-name="CURRENT_TIME" start-index="7" stop-index="21" text="CURRENT_TIME(3)">
+                        <parameter>
+                            <literal-expression value="3" start-index="20" stop-index="20" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_select_natural_join">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <join-table join-type="INNER" start-index="14" stop-index="31" natural="true">
+                <left>
+                    <simple-table name="t1" start-index="14" stop-index="15" />
+                </left>
+                <right>
+                    <simple-table name="t2" start-index="30" stop-index="31" />
+                </right>
+            </join-table>
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_match">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_doc" start-index="14" stop-index="18" />
+        </from>
+        <where start-index="20" stop-index="53">
+            <expr>
+                <common-expression text="MATCH(title) AGAINST('hive')" start-index="26" stop-index="53" />
+            </expr>
+        </where>
+    </select>
+
+    <select sql-case-id="hive_select_trim">
+        <projections start-index="7" stop-index="31">
+            <expression-projection text="TRIM(BOTH ' ' FROM ' a ')" start-index="7" stop-index="31">
+                <expr>
+                    <function function-name="TRIM" start-index="7" stop-index="31" text="TRIM(BOTH ' ' FROM ' a ')">
+                       <parameter>
+                           <literal-expression value="BOTH" start-index="12" stop-index="15" />
+                       </parameter>
+                       <parameter>
+                           <literal-expression value=" " start-index="17" stop-index="19" />
+                       </parameter>
+                       <parameter>
+                           <literal-expression value=" a " start-index="26" stop-index="30" />
+                       </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_select_extract">
+        <projections start-index="7" stop-index="37">
+             <expression-projection text="EXTRACT(YEAR FROM '2023-01-01')" start-index="7" stop-index="37">
+                <expr>
+                    <function function-name="EXTRACT" start-index="7" stop-index="37" text="EXTRACT(YEAR FROM '2023-01-01')">
+                       <parameter>
+                           <literal-expression value="YEAR" start-index="15" stop-index="18" />
+                       </parameter>
+                       <parameter>
+                           <literal-expression value="2023-01-01" start-index="25" stop-index="36" />
+                       </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_select_qualified_shorthand">
+        <projections start-index="7" stop-index="19">
+            <shorthand-projection start-index="7" stop-index="19">
+                <owner name="t_order" start-index="11" stop-index="17">
+                    <owner name="db1" start-index="7" stop-index="9" />
+                </owner>
+            </shorthand-projection>
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="26" stop-index="36">
+                <owner name="db1" start-index="26" stop-index="28" />
+            </simple-table>
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_xor">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_logic" start-index="14" stop-index="20" />
+        </from>
+        <where start-index="22" stop-index="34">
+            <expr>
+                <binary-operation-expression start-index="28" stop-index="34">
+                    <left>
+                        <column name="a" start-index="28" stop-index="28" />
+                    </left>
+                    <operator>XOR</operator>
+                    <right>
+                        <column name="b" start-index="34" stop-index="34" />
+                    </right>
+                </binary-operation-expression>
+            </expr>
+        </where>
+    </select>
+
+    <select sql-case-id="hive_select_in_list">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_pred" start-index="14" stop-index="19" />
+        </from>
+        <where start-index="21" stop-index="38">
+            <expr>
+                <in-expression start-index="27" stop-index="38">
+                    <left>
+                        <column name="col" start-index="27" stop-index="29" />
+                    </left>
+                    <right>
+                        <list-expression start-index="34" stop-index="38">
+                            <items>
+                                <literal-expression value="1" start-index="35" stop-index="35" />
+                            </items>
+                            <items>
+                                <literal-expression value="2" start-index="37" stop-index="37" />
+                            </items>
+                        </list-expression>
+                    </right>
+                </in-expression>
+            </expr>
+        </where>
+    </select>
+
+    <select sql-case-id="hive_select_equal_all_subquery">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_pred" start-index="14" stop-index="19" />
+        </from>
+        <where start-index="21" stop-index="46">
+            <expr>
+                <binary-operation-expression start-index="27" stop-index="46">
+                    <left>
+                        <column name="col" start-index="27" stop-index="29" />
+                    </left>
+                    <operator>= ALL</operator>
+                    <right>
+                        <subquery start-index="37" stop-index="46">
+                            <select>
+                                <projections start-index="45" stop-index="45">
+                                    <expression-projection text="2" start-index="45" stop-index="45">
+                                        <expr>
+                                            <literal-expression value="2" start-index="45" stop-index="45" />
+                                        </expr>
+                                    </expression-projection>
+                                </projections>
+                            </select>
+                        </subquery>
+                    </right>
+                </binary-operation-expression>
+            </expr>
+        </where>
+    </select>
+
+    <select sql-case-id="hive_select_order_limit_param">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="14" stop-index="20" />
+        </from>
+        <order-by>
+            <index-item index="1" order-direction="ASC" start-index="31" stop-index="31" />
+            <expression-item expression="price + 1" order-direction="DESC" start-index="34" stop-index="42">
+                <expr>
+                    <binary-operation-expression start-index="34" stop-index="42">
+                        <left>
+                            <column name="price" start-index="34" stop-index="38" />
+                        </left>
+                        <operator>+</operator>
+                        <right>
+                            <literal-expression value="1" start-index="42" stop-index="42" />
+                        </right>
+                    </binary-operation-expression>
+                </expr>
+            </expression-item>
+        </order-by>
+        <limit start-index="49" stop-index="64">
+            <row-count value="1" start-index="55" stop-index="55" />
+            <offset value="1" start-index="64" stop-index="64" />
+        </limit>
+    </select>
+
+    <select sql-case-id="hive_select_case_variables">
+        <projections start-index="7" stop-index="59">
+            <expression-projection text="CASE WHEN a &gt; 1 THEN b ELSE c END" start-index="7" stop-index="39">
+                <expr>
+                    <case-when-expression start-index="7" stop-index="39">
+                        <when-exprs>
+                            <binary-operation-expression start-index="17" stop-index="21">
+                                <left>
+                                    <column name="a" start-index="17" stop-index="17" />
+                                </left>
+                                <operator>&gt;</operator>
+                                <right>
+                                    <literal-expression value="1" start-index="21" stop-index="21" />
+                                </right>
+                            </binary-operation-expression>
+                        </when-exprs>
+                        <then-exprs>
+                            <column name="b" start-index="28" stop-index="28" />
+                        </then-exprs>
+                        <else-expr>
+                            <column name="c" start-index="35" stop-index="35" />
+                        </else-expr>
+                    </case-when-expression>
+                </expr>
+            </expression-projection>
+            <expression-projection text="@var" start-index="42" stop-index="45">
+                <expr>
+                    <variable-segment start-index="42" stop-index="45" variable="var" />
+                </expr>
+            </expression-projection>
+            <expression-projection text="@@global.var" start-index="48" stop-index="59">
+                <expr>
+                    <variable-segment text="@@global.var" start-index="48" stop-index="59" variable="var" scope="global" />
+                </expr>
+            </expression-projection>
+        </projections>
+        <from>
+            <simple-table name="t_case" start-index="66" stop-index="71" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_join_using_comma">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <join-table join-type="COMMA" start-index="14" stop-index="38">
+                <left>
+                    <join-table join-type="INNER" start-index="14" stop-index="34">
+                        <left>
+                            <simple-table name="t1" start-index="14" stop-index="15" />
+                        </left>
+                        <right>
+                            <simple-table name="t2" start-index="22" stop-index="23" />
+                        </right>
+                        <using-columns name="id" start-index="32" stop-index="33" />
+                    </join-table>
+                </left>
+                <right>
+                    <simple-table name="t3" start-index="37" stop-index="38" />
+                </right>
+            </join-table>
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_literals_dual">
+        <projections start-index="7" stop-index="37">
+            <expression-projection text="DATE'2024-01-01'" start-index="7" stop-index="23">
+                <expr>
+                    <common-expression text="DATE'2024-01-01'" start-index="7" stop-index="23" />
+                </expr>
+            </expression-projection>
+            <expression-projection text="0x1F" start-index="26" stop-index="29">
+                <expr>
+                    <common-expression text="0x1F" start-index="26" stop-index="29" />
+                </expr>
+            </expression-projection>
+            <expression-projection text="B'101'" start-index="32" stop-index="37">
+                <expr>
+                    <common-expression text="B'101'" start-index="32" stop-index="37" />
+                </expr>
+            </expression-projection>
+        </projections>
+        <from>
+            <simple-table name="DUAL" start-index="44" stop-index="47" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_owner_function">
+        <projections start-index="7" stop-index="23">
+            <expression-projection text="analytics.fn(col)" start-index="7" stop-index="23">
+                <expr>
+                    <function function-name="analytics.fn(col)" text="analytics.fn(col)" start-index="7" stop-index="23">
+                        <parameter>
+                            <column name="col" start-index="20" stop-index="22" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+        <from>
+            <simple-table name="t_func_owner" start-index="30" stop-index="41" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_group_concat_order">
+        <from>
+            <simple-table name="t_order" start-index="49" stop-index="55" />
+        </from>
+        <projections start-index="7" stop-index="42">
+            <expression-projection text="GROUP_CONCAT(status ORDER BY status)" start-index="7" stop-index="42">
+                <expr>
+                    <function function-name="GROUP_CONCAT" start-index="7" stop-index="42" text="GROUP_CONCAT(status ORDER BY status)">
+                        <parameter>
+                            <column name="status" start-index="20" stop-index="25" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_json_array_simple">
+        <projections start-index="7" stop-index="49">
+            <expression-projection text="JSON_ARRAY(1, 'abc', NULL, TRUE, CURTIME())" start-index="7" stop-index="49" >
+                <expr>
+                    <function function-name="JSON_ARRAY" text="JSON_ARRAY(1, 'abc', NULL, TRUE, CURTIME())" start-index="7" stop-index="49" />
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_convert_date">
+        <projections start-index="7" stop-index="33">
+            <expression-projection text="CONVERT('2020-10-01', DATE)" start-index="7" stop-index="33">
+                <expr>
+                    <function function-name="CONVERT" text="CONVERT('2020-10-01', DATE)" start-index="7" stop-index="33">
+                        <parameter>
+                            <literal-expression value="2020-10-01" start-index="15" stop-index="26" />
+                        </parameter>
+                        <parameter>
+                            <data-type value="DATE" start-index="29" stop-index="32" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_convert_with_placeholder">
+        <projections start-index="7" stop-index="23">
+            <expression-projection text="CONVERT(?, DATE)" start-index="7" stop-index="23">
+                <expr>
+                    <function function-name="CONVERT" text="CONVERT(?, DATE)" start-index="7" stop-index="23">
+                        <parameter>
+                            <parameter-marker index="0" start-index="15" stop-index="15" />
+                        </parameter>
+                        <parameter>
+                            <data-type value="DATE" start-index="18" stop-index="21" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="30" stop-index="36" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_convert_using_with_placeholder">
+        <projections start-index="7" stop-index="28">
+            <expression-projection text="CONVERT(? USING utf8)" start-index="7" stop-index="28">
+                <expr>
+                    <function function-name="CONVERT" text="CONVERT(? USING utf8)" start-index="7" stop-index="28">
+                        <parameter>
+                            <parameter-marker index="0" start-index="15" stop-index="15" />
+                        </parameter>
+                        <parameter>
+                            <literal-expression value="utf8" start-index="23" stop-index="26" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="35" stop-index="41" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_limit_param" parameters="1,2">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="14" stop-index="20" />
+        </from>
+        <limit start-index="22" stop-index="37">
+            <row-count value="1" parameter-index="0" start-index="28" stop-index="28" />
+            <offset value="2" parameter-index="1" start-index="37" stop-index="37" />
+        </limit>
+    </select>
+
+    <select sql-case-id="hive_select_not">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_pred" start-index="14" stop-index="19" />
+        </from>
+        <where start-index="21" stop-index="36">
+            <expr>
+                <not-expression start-index="27" stop-index="36">
+                    <expr>
+                        <column name="status" start-index="31" stop-index="36" />
+                    </expr>
+                </not-expression>
+            </expr>
+        </where>
+    </select>
+
+    <select sql-case-id="hive_select_is_null">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_pred" start-index="14" stop-index="19" />
+        </from>
+        <where start-index="21" stop-index="40">
+            <expr>
+                <binary-operation-expression start-index="27" stop-index="40">
+                    <left>
+                        <column name="status" start-index="27" stop-index="32" />
+                    </left>
+                    <operator>IS</operator>
+                    <right>
+                        <literal-expression value="NULL" start-index="37" stop-index="40" />
+                    </right>
+                </binary-operation-expression>
+            </expr>
+        </where>
+    </select>
+
+    <select sql-case-id="hive_select_between">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_pred" start-index="14" stop-index="19" />
+        </from>
+        <where start-index="21" stop-index="47">
+            <expr>
+                <between-expression start-index="27" stop-index="47">
+                    <left>
+                        <column name="age" start-index="27" stop-index="29" />
+                    </left>
+                    <between-expr>
+                        <literal-expression value="10" start-index="39" stop-index="40" />
+                    </between-expr>
+                    <and-expr>
+                        <literal-expression value="20" start-index="46" stop-index="47" />
+                    </and-expr>
+                </between-expression>
+            </expr>
+        </where>
+    </select>
+
+    <select sql-case-id="hive_select_regexp">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_pred" start-index="14" stop-index="19" />
+        </from>
+        <where start-index="21" stop-index="41">
+            <expr>
+                <binary-operation-expression start-index="27" stop-index="41">
+                    <left>
+                        <column name="name" start-index="27" stop-index="30" />
+                    </left>
+                    <operator>REGEXP</operator>
+                    <right>
+                        <literal-expression value="a" start-index="39" stop-index="41" />
+                    </right>
+                </binary-operation-expression>
+            </expr>
+        </where>
+    </select>
+
+    <select sql-case-id="hive_select_rlike">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_pred" start-index="14" stop-index="19" />
+        </from>
+        <where start-index="21" stop-index="40">
+            <expr>
+                <binary-operation-expression start-index="27" stop-index="40">
+                    <left>
+                        <column name="name" start-index="27" stop-index="30" />
+                    </left>
+                    <operator>RLIKE</operator>
+                    <right>
+                        <literal-expression value="a" start-index="38" stop-index="40" />
+                    </right>
+                </binary-operation-expression>
+            </expr>
+        </where>
+    </select>
+
+    <select sql-case-id="hive_select_equal_equal">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_pred" start-index="14" stop-index="19" />
+        </from>
+        <where start-index="21" stop-index="42">
+            <expr>
+                <binary-operation-expression start-index="27" stop-index="42">
+                    <left>
+                        <column name="status" start-index="27" stop-index="32" />
+                    </left>
+                    <operator>=</operator>
+                    <right>
+                        <literal-expression value="INIT" start-index="37" stop-index="42" />
+                    </right>
+                </binary-operation-expression>
+            </expr>
+        </where>
+    </select>
+
+    <select sql-case-id="hive_select_unary_operator_projection">
+        <projections start-index="7" stop-index="99">
+            <expression-projection text="+order_id" alias="positive_order_id" start-index="7" stop-index="36">
+                <expr>
+                    <unary-operation-expression text="+order_id" start-index="7" stop-index="15">
+                        <operator>+</operator>
+                        <expr>
+                            <column name="order_id" start-index="8" stop-index="15" />
+                        </expr>
+                    </unary-operation-expression>
+                </expr>
+            </expression-projection>
+            <expression-projection text="-order_id" alias="negative_order_id" start-index="39" stop-index="68">
+                <expr>
+                    <unary-operation-expression text="-order_id" start-index="39" stop-index="47">
+                        <operator>-</operator>
+                        <expr>
+                            <column name="order_id" start-index="40" stop-index="47" />
+                        </expr>
+                    </unary-operation-expression>
+                </expr>
+            </expression-projection>
+            <expression-projection text="~order_id" alias="bit_not_order_id" start-index="71" stop-index="99">
+                <expr>
+                    <unary-operation-expression text="~order_id" start-index="71" stop-index="79">
+                        <operator>~</operator>
+                        <expr>
+                            <column name="order_id" start-index="72" stop-index="79" />
+                        </expr>
+                    </unary-operation-expression>
+                </expr>
+            </expression-projection>
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="106" stop-index="112" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_or_expr">
+        <projections start-index="7" stop-index="12">
+            <expression-projection text="1 OR 0" start-index="7" stop-index="12">
+                <expr>
+                    <binary-operation-expression start-index="7" stop-index="12">
+                        <left>
+                            <literal-expression value="1" start-index="7" stop-index="7" />
+                        </left>
+                        <operator>OR</operator>
+                        <right>
+                            <literal-expression value="0" start-index="12" stop-index="12" />
+                        </right>
+                    </binary-operation-expression>
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_select_count_distinct">
+        <projections start-index="7" stop-index="29">
+            <aggregation-distinct-projection type="COUNT" expression="(DISTINCT user_id)" distinct-inner-expression="user_id" start-index="7" stop-index="29" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="36" stop-index="42" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_window_frame">
+        <projections start-index="7" stop-index="98">
+            <aggregation-projection type="SUM" expression="(amount) OVER (PARTITION BY user_id ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)" start-index="7" stop-index="98">
+                <window-item start-index="24" stop-index="98">
+                    <partition-by>
+                        <column name="user_id" start-index="38" stop-index="44" />
+                    </partition-by>
+                    <order-by start-index="46" stop-index="56">
+                        <column-item name="id" order-direction="ASC" start-index="55" stop-index="56" />
+                    </order-by>
+                    <!-- HiveDMLStatementVisitor#visitWindowSpecification uses frameClause().getText(), which strips whitespace between tokens -->
+                    <frame>
+                        <common-expression text="ROWSBETWEEN1PRECEDINGANDCURRENTROW" start-index="58" stop-index="97" />
+                    </frame>
+                </window-item>
+                <parameter>
+                    <column name="amount" start-index="11" stop-index="16" />
+                </parameter>
+            </aggregation-projection>
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="105" stop-index="111" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_first_value_skip_null_placeholder" parameters="1">
+        <projections start-index="7" stop-index="90">
+            <expression-projection text="first_value(remark, ?) OVER (PARTITION BY user_id ORDER BY order_id)" alias="first_remark" start-index="7" stop-index="90">
+                <expr>
+                    <function function-name="first_value" text="first_value(remark, ?) OVER (PARTITION BY user_id ORDER BY order_id)" start-index="7" stop-index="74">
+                        <parameter>
+                            <column name="remark" start-index="19" stop-index="24" />
+                        </parameter>
+                        <parameter>
+                            <parameter-marker-expression parameter-index="0" start-index="27" stop-index="27" />
+                        </parameter>
+                        <window-item start-index="30" stop-index="74">
+                            <partition-by>
+                                <column name="user_id" start-index="49" stop-index="55" />
+                            </partition-by>
+                            <order-by start-index="57" stop-index="73">
+                                <column-item name="order_id" order-direction="ASC" start-index="66" stop-index="73" />
+                            </order-by>
+                        </window-item>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="97" stop-index="103" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_first_value_identifier">
+        <projections start-index="7" stop-index="17">
+            <column-projection name="first_value" start-index="7" stop-index="17" />
+        </projections>
+        <from>
+            <simple-table name="t_user" start-index="24" stop-index="29" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_position_function">
+        <projections start-index="7" stop-index="28">
+            <expression-projection text="POSITION('b' IN 'abc')" start-index="7" stop-index="28">
+                <expr>
+                    <function function-name="POSITION" start-index="7" stop-index="28" text="POSITION('b' IN 'abc')">
+                        <parameter>
+                            <literal-expression value="b" start-index="16" stop-index="18" />
+                        </parameter>
+                        <parameter>
+                            <literal-expression value="abc" start-index="23" stop-index="27" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_select_char_function">
+        <projections start-index="7" stop-index="14">
+            <expression-projection text="CHAR(97)" start-index="7" stop-index="14">
+                <expr>
+                    <function function-name="CHAR" start-index="7" stop-index="14" text="CHAR(97)">
+                        <parameter>
+                            <literal-expression value="97" start-index="12" stop-index="13" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_select_weight_string">
+        <projections start-index="7" stop-index="24">
+            <expression-projection text="WEIGHT_STRING('a')" start-index="7" stop-index="24">
+                <expr>
+                    <function function-name="WEIGHT_STRING" start-index="7" stop-index="24" text="WEIGHT_STRING('a')">
+                        <parameter>
+                            <literal-expression value="a" start-index="21" stop-index="23" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_select_current_user">
+        <projections start-index="7" stop-index="18">
+            <expression-projection text="CURRENT_USER" start-index="7" stop-index="18">
+                <expr>
+                    <function function-name="CURRENT_USER" start-index="7" stop-index="18" text="CURRENT_USER" />
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_select_map_function_placeholder" parameters="1, 1, 1, 1">
+        <projections start-index="7" stop-index="21">
+            <expression-projection text="map(?, ?, ?, ?)" start-index="7" stop-index="21">
+                <expr>
+                    <function function-name="map" start-index="7" stop-index="21" text="map(?, ?, ?, ?)">
+                        <parameter>
+                            <parameter-marker-expression parameter-index="0" start-index="11" stop-index="11" />
+                        </parameter>
+                        <parameter>
+                            <parameter-marker-expression parameter-index="1" start-index="14" stop-index="14" />
+                        </parameter>
+                        <parameter>
+                            <parameter-marker-expression parameter-index="2" start-index="17" stop-index="17" />
+                        </parameter>
+                        <parameter>
+                            <parameter-marker-expression parameter-index="3" start-index="20" stop-index="20" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+        <from>
+            <simple-table name="t_user" start-index="28" stop-index="33" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_struct_function_placeholder" parameters="1, 1">
+        <projections start-index="7" stop-index="18">
+            <expression-projection text="struct(?, ?)" start-index="7" stop-index="18">
+                <expr>
+                    <function function-name="struct" start-index="7" stop-index="18" text="struct(?, ?)">
+                        <parameter>
+                            <parameter-marker-expression parameter-index="0" start-index="14" stop-index="14" />
+                        </parameter>
+                        <parameter>
+                            <parameter-marker-expression parameter-index="1" start-index="17" stop-index="17" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+        <from>
+            <simple-table name="t_user" start-index="25" stop-index="30" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_grouping_with_cube">
+        <projections start-index="7" stop-index="32">
+            <expression-projection text="grouping(status)" start-index="7" stop-index="22">
+                <expr>
+                    <function function-name="grouping" start-index="7" stop-index="22" text="grouping(status)">
+                        <parameter>
+                            <column name="status" start-index="16" stop-index="21" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+            <aggregation-projection type="COUNT" expression="(*)" start-index="25" stop-index="32" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="39" stop-index="45" />
+        </from>
+        <group-by contains-grouping-extension="true">
+            <column-item name="status" start-index="56" stop-index="61" />
+        </group-by>
+    </select>
+
+    <select sql-case-id="hive_select_grouping_sets">
+        <projections start-index="7" stop-index="35">
+            <column-projection name="status" start-index="7" stop-index="12" />
+            <column-projection name="merchant_id" start-index="15" stop-index="25" />
+            <aggregation-projection type="COUNT" expression="(*)" start-index="28" stop-index="35" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="42" stop-index="48" />
+        </from>
+        <group-by contains-grouping-extension="true">
+            <column-item name="status" start-index="59" stop-index="64" />
+            <column-item name="merchant_id" start-index="67" stop-index="77" />
+            <column-item name="status" start-index="95" stop-index="100" />
+            <column-item name="merchant_id" start-index="103" stop-index="113" />
+            <column-item name="status" start-index="118" stop-index="123" />
+        </group-by>
+    </select>
+
+    <select sql-case-id="hive_select_cast_datetime_precision">
+        <projections start-index="7" stop-index="39">
+            <expression-projection text="CAST('2024-01-01' AS DATETIME(3))" start-index="7" stop-index="39">
+                <expr>
+                    <function function-name="CAST" text="CAST('2024-01-01' AS DATETIME(3))" start-index="7" stop-index="39">
+                        <parameter>
+                            <literal-expression value="2024-01-01" start-index="12" stop-index="23" />
+                        </parameter>
+                        <parameter>
+                            <data-type value="DATETIME" start-index="28" stop-index="38">
+                                <data-type-length precision="3" start-index="37" stop-index="37" />
+                            </data-type>
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+    </select>
+
+    <select sql-case-id="hive_select_cast_timestamp_placeholder" parameters="1">
+        <projections start-index="7" stop-index="26">
+            <expression-projection text="CAST(? AS TIMESTAMP)" start-index="7" stop-index="26">
+                <expr>
+                    <function function-name="CAST" text="CAST(? AS TIMESTAMP)" start-index="7" stop-index="26">
+                        <parameter>
+                            <parameter-marker-expression parameter-index="0" start-index="12" stop-index="12" />
+                        </parameter>
+                        <parameter>
+                            <data-type value="TIMESTAMP" start-index="17" stop-index="25" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="33" stop-index="39" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_cast_timestamp_local_time_zone_placeholder" parameters="1">
+        <projections start-index="7" stop-index="47">
+            <expression-projection text="CAST(? AS TIMESTAMP WITH LOCAL TIME ZONE)" start-index="7" stop-index="47">
+                <expr>
+                    <function function-name="CAST" text="CAST(? AS TIMESTAMP WITH LOCAL TIME ZONE)" start-index="7" stop-index="47">
+                        <parameter>
+                            <parameter-marker-expression parameter-index="0" start-index="12" stop-index="12" />
+                        </parameter>
+                        <parameter>
+                            <data-type value="TIMESTAMP" start-index="17" stop-index="46" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="54" stop-index="60" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_cast_string_placeholder" parameters="1">
+        <projections start-index="7" stop-index="23">
+            <expression-projection text="CAST(? AS STRING)" start-index="7" stop-index="23">
+                <expr>
+                    <function function-name="CAST" text="CAST(? AS STRING)" start-index="7" stop-index="23">
+                        <parameter>
+                            <parameter-marker-expression parameter-index="0" start-index="12" stop-index="12" />
+                        </parameter>
+                        <parameter>
+                            <data-type value="STRING" start-index="17" stop-index="22" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="30" stop-index="36" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_full_outer_join">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <join-table join-type="FULL" start-index="14" stop-index="72">
+                <left>
+                    <simple-table name="t_user" alias="u" start-index="14" stop-index="21" />
+                </left>
+                <right>
+                    <simple-table name="t_order" alias="o" start-index="39" stop-index="47" />
+                </right>
+                <on-condition start-index="52" stop-index="72">
+                    <binary-operation-expression start-index="52" stop-index="72">
+                        <left>
+                            <column name="user_id" start-index="52" stop-index="60">
+                                <owner name="u" start-index="52" stop-index="52" />
+                            </column>
+                        </left>
+                        <operator>=</operator>
+                        <right>
+                            <column name="user_id" start-index="64" stop-index="72">
+                                <owner name="o" start-index="64" stop-index="64" />
+                            </column>
+                        </right>
+                    </binary-operation-expression>
+                </on-condition>
+            </join-table>
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_left_semi_join">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <join-table join-type="LEFT" start-index="14" stop-index="71">
+                <left>
+                    <simple-table name="t_order" alias="o" start-index="14" stop-index="22" />
+                </left>
+                <right>
+                    <simple-table name="t_user" alias="u" start-index="39" stop-index="46" />
+                </right>
+                <on-condition start-index="51" stop-index="71">
+                    <binary-operation-expression start-index="51" stop-index="71">
+                        <left>
+                            <column name="user_id" start-index="51" stop-index="59">
+                                <owner name="o" start-index="51" stop-index="51" />
+                            </column>
+                        </left>
+                        <operator>=</operator>
+                        <right>
+                            <column name="user_id" start-index="63" stop-index="71">
+                                <owner name="u" start-index="63" stop-index="63" />
+                            </column>
+                        </right>
+                    </binary-operation-expression>
+                </on-condition>
+            </join-table>
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_tablesample_bucket">
+        <projections start-index="7" stop-index="28">
+            <column-projection name="order_id" start-index="7" stop-index="28">
+                <owner name="sampled_order" start-index="7" stop-index="19" />
+            </column-projection>
+        </projections>
+        <from>
+            <simple-table name="t_order" alias="sampled_order" start-index="35" stop-index="98" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_tablesample_percent">
+        <projections start-index="7" stop-index="28">
+            <column-projection name="order_id" start-index="7" stop-index="28">
+                <owner name="sampled_order" start-index="7" stop-index="19" />
+            </column-projection>
+        </projections>
+        <from>
+            <simple-table name="t_order" alias="sampled_order" start-index="35" stop-index="80" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_tablesample_rows">
+        <projections start-index="7" stop-index="28">
+            <column-projection name="order_id" start-index="7" stop-index="28">
+                <owner name="sampled_order" start-index="7" stop-index="19" />
+            </column-projection>
+        </projections>
+        <from>
+            <simple-table name="t_order" alias="sampled_order" start-index="35" stop-index="76" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_tablesample_filesize">
+        <projections start-index="7" stop-index="28">
+            <column-projection name="order_id" start-index="7" stop-index="28">
+                <owner name="sampled_order" start-index="7" stop-index="19" />
+            </column-projection>
+        </projections>
+        <from>
+            <simple-table name="t_order" alias="sampled_order" start-index="35" stop-index="73" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_transform">
+        <projections start-index="7" stop-index="25">
+            <column-projection name="transformed_user_id" start-index="7" stop-index="25" />
+        </projections>
+        <from>
+            <subquery-table alias="transformed_user" start-index="32" stop-index="128">
+                <subquery start-index="32" stop-index="111">
+                    <select>
+                        <projections start-index="40" stop-index="98">
+                            <column-projection name="transformed_user_id" start-index="75" stop-index="93" />
+                        </projections>
+                        <from>
+                            <simple-table name="t_user" start-index="105" stop-index="110" />
+                        </from>
+                        <variable-name>transformed_user_id</variable-name>
+                        <transform function-name="TRANSFORM" parameter-count="1" />
+                    </select>
+                </subquery>
+            </subquery-table>
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_map_transform">
+        <projections start-index="7" stop-index="25">
+            <column-projection name="transformed_user_id" start-index="7" stop-index="25" />
+        </projections>
+        <from>
+            <subquery-table alias="transformed_user" start-index="32" stop-index="108">
+                <subquery start-index="32" stop-index="91">
+                    <select>
+                        <projections start-index="45" stop-index="90">
+                            <column-projection name="transformed_user_id" start-index="72" stop-index="90" />
+                        </projections>
+                        <from>
+                            <simple-table name="t_user" start-index="38" stop-index="43" />
+                        </from>
+                    </select>
+                </subquery>
+            </subquery-table>
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_transform_default_output">
+        <projections start-index="7" stop-index="36">
+            <column-projection name="key" start-index="7" stop-index="7" />
+            <column-projection name="value" start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t_user" start-index="43" stop-index="48" />
+        </from>
+        <variable-name>key</variable-name>
+        <variable-name>value</variable-name>
+        <transform function-name="TRANSFORM" parameter-count="1" />
+    </select>
+
+    <select sql-case-id="hive_select_map_transform_multiple_inputs">
+        <projections start-index="12" stop-index="91">
+            <column-projection name="transformed_user_id" start-index="50" stop-index="68" />
+            <column-projection name="transformed_user_name" start-index="71" stop-index="91" />
+        </projections>
+        <from>
+            <simple-table name="t_user" start-index="5" stop-index="10" />
+        </from>
+        <transform function-name="MAP" parameter-count="2" />
+    </select>
+
+    <select sql-case-id="hive_select_grouping_with_cube_multiple_items">
+        <projections start-index="7" stop-index="49">
+            <column-projection name="status" start-index="7" stop-index="12" />
+            <column-projection name="merchant_id" start-index="15" stop-index="25" />
+            <column-projection name="grouping__id" start-index="28" stop-index="39" />
+            <aggregation-projection type="COUNT" expression="(*)" start-index="42" stop-index="49" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="56" stop-index="62" />
+        </from>
+        <group-by contains-grouping-extension="true">
+            <column-item name="status" start-index="73" stop-index="78" />
+            <column-item name="merchant_id" start-index="81" stop-index="91" />
+        </group-by>
+    </select>
+
+    <select sql-case-id="hive_select_system_column_variable">
+        <projections start-index="7" stop-index="25">
+            <column-projection name="INPUT__FILE__NAME" start-delimiter="`" end-delimiter="`" start-index="7" stop-index="25" />
+        </projections>
+        <from>
+            <simple-table name="t_user" start-index="32" stop-index="37" />
+        </from>
+        <variable-name>INPUT__FILE__NAME</variable-name>
+    </select>
+
+    <select sql-case-id="hive_select_row_number_window">
+        <projections start-index="7" stop-index="109">
+            <expression-projection text="ROW_NUMBER() OVER (PARTITION BY merchant_id, telephone ORDER BY creation_date DESC)" alias="row_number_value" start-index="7" stop-index="109">
+                <expr>
+                    <function function-name="ROW_NUMBER" text="ROW_NUMBER() OVER (PARTITION BY merchant_id, telephone ORDER BY creation_date DESC)" start-index="7" stop-index="89">
+                        <window-item start-index="20" stop-index="89">
+                            <partition-by>
+                                <column name="merchant_id" start-index="39" stop-index="49" />
+                                <column name="telephone" start-index="52" stop-index="60" />
+                            </partition-by>
+                            <order-by start-index="62" stop-index="88">
+                                <column-item name="creation_date" order-direction="DESC" start-index="71" stop-index="83" />
+                            </order-by>
+                        </window-item>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+        <from>
+            <simple-table name="t_merchant" start-index="116" stop-index="125" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_avg_window">
+        <projections start-index="7" stop-index="122">
+            <aggregation-projection type="AVG" expression="(quantity) OVER (PARTITION BY order_id ORDER BY item_id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)"
+                                    alias="avg_quantity" start-index="7" stop-index="106">
+                <window-item start-index="26" stop-index="106">
+                    <partition-by>
+                        <column name="order_id" start-index="40" stop-index="47" />
+                    </partition-by>
+                    <order-by start-index="49" stop-index="64">
+                        <column-item name="item_id" order-direction="ASC" start-index="58" stop-index="64" />
+                    </order-by>
+                    <frame>
+                        <common-expression text="ROWSBETWEEN1PRECEDINGANDCURRENTROW" start-index="66" stop-index="105" />
+                    </frame>
+                </window-item>
+            </aggregation-projection>
+        </projections>
+        <from>
+            <simple-table name="t_order_item" start-index="129" stop-index="140" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_count_distinct_window">
+        <projections start-index="7" stop-index="87">
+            <aggregation-distinct-projection type="COUNT" expression="(DISTINCT product_id) OVER (PARTITION BY order_id)" distinct-inner-expression="product_id)"
+                                             alias="distinct_product_count" start-index="7" stop-index="61">
+                <window-item start-index="39" stop-index="61">
+                    <partition-by>
+                        <column name="order_id" start-index="53" stop-index="60" />
+                    </partition-by>
+                </window-item>
+            </aggregation-distinct-projection>
+        </projections>
+        <from>
+            <simple-table name="t_order_item" start-index="94" stop-index="105" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_cluster_by">
+        <projections start-index="7" stop-index="14">
+            <column-projection name="order_id" start-index="7" stop-index="14" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="21" stop-index="27" />
+        </from>
+        <order-by>
+            <column-item name="user_id" order-direction="ASC" start-index="40" stop-index="46" />
+        </order-by>
+    </select>
+
+    <select sql-case-id="hive_select_order_by_nulls">
+        <projections start-index="7" stop-index="14">
+            <column-projection name="order_id" start-index="7" stop-index="14" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="21" stop-index="27" />
+        </from>
+        <order-by>
+            <column-item name="remark" order-direction="ASC" start-index="38" stop-index="43" />
+        </order-by>
+    </select>
+
+    <select sql-case-id="hive_select_sort_by">
+        <projections start-index="7" stop-index="14">
+            <column-projection name="order_id" start-index="7" stop-index="14" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="21" stop-index="27" />
+        </from>
+        <order-by>
+            <column-item name="order_id" order-direction="DESC" start-index="37" stop-index="44" />
+        </order-by>
+    </select>
+
+    <select sql-case-id="hive_select_distribute_sort_by">
+        <projections start-index="7" stop-index="14">
+            <column-projection name="order_id" start-index="7" stop-index="14" />
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="21" stop-index="27" />
+        </from>
+        <order-by>
+            <column-item name="user_id" order-direction="ASC" start-index="43" stop-index="49" />
+            <column-item name="order_id" order-direction="DESC" start-index="59" stop-index="66" />
+        </order-by>
+    </select>
+
+    <select sql-case-id="hive_select_with_cte">
+        <with start-index="0" stop-index="48">
+            <common-table-expression name="user_orders" start-index="5" stop-index="48">
+                <subquery start-index="20" stop-index="48">
+                    <select>
+                        <projections start-index="28" stop-index="34">
+                            <column-projection name="user_id" start-index="28" stop-index="34" />
+                        </projections>
+                        <from>
+                            <simple-table name="t_order" start-index="41" stop-index="47" />
+                        </from>
+                    </select>
+                </subquery>
+            </common-table-expression>
+        </with>
+        <projections start-index="57" stop-index="63">
+            <column-projection name="user_id" start-index="57" stop-index="63" />
+        </projections>
+        <from>
+            <simple-table name="user_orders" start-index="70" stop-index="80" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_except">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t1" start-index="14" stop-index="15" />
+        </from>
+        <combine combine-type="EXCEPT" start-index="17" stop-index="39">
+            <left>
+                <projections start-index="7" stop-index="7">
+                    <shorthand-projection start-index="7" stop-index="7" />
+                </projections>
+                <from>
+                    <simple-table name="t1" start-index="14" stop-index="15" />
+                </from>
+            </left>
+            <right>
+                <projections start-index="31" stop-index="31">
+                    <shorthand-projection start-index="31" stop-index="31" />
+                </projections>
+                <from>
+                    <simple-table name="t2" start-index="38" stop-index="39" />
+                </from>
+            </right>
+        </combine>
+    </select>
+
+    <select sql-case-id="hive_select_except_all">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t1" start-index="14" stop-index="15" />
+        </from>
+        <combine combine-type="EXCEPT_ALL" start-index="17" stop-index="43">
+            <left>
+                <projections start-index="7" stop-index="7">
+                    <shorthand-projection start-index="7" stop-index="7" />
+                </projections>
+                <from>
+                    <simple-table name="t1" start-index="14" stop-index="15" />
+                </from>
+            </left>
+            <right>
+                <projections start-index="35" stop-index="35">
+                    <shorthand-projection start-index="35" stop-index="35" />
+                </projections>
+                <from>
+                    <simple-table name="t2" start-index="42" stop-index="43" />
+                </from>
+            </right>
+        </combine>
+    </select>
+
+    <select sql-case-id="hive_select_intersect">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t1" start-index="14" stop-index="15" />
+        </from>
+        <combine combine-type="INTERSECT" start-index="17" stop-index="42">
+            <left>
+                <projections start-index="7" stop-index="7">
+                    <shorthand-projection start-index="7" stop-index="7" />
+                </projections>
+                <from>
+                    <simple-table name="t1" start-index="14" stop-index="15" />
+                </from>
+            </left>
+            <right>
+                <projections start-index="34" stop-index="34">
+                    <shorthand-projection start-index="34" stop-index="34" />
+                </projections>
+                <from>
+                    <simple-table name="t2" start-index="41" stop-index="42" />
+                </from>
+            </right>
+        </combine>
+    </select>
+
+    <select sql-case-id="hive_select_intersect_all">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t1" start-index="14" stop-index="15" />
+        </from>
+        <combine combine-type="INTERSECT_ALL" start-index="17" stop-index="46">
+            <left>
+                <projections start-index="7" stop-index="7">
+                    <shorthand-projection start-index="7" stop-index="7" />
+                </projections>
+                <from>
+                    <simple-table name="t1" start-index="14" stop-index="15" />
+                </from>
+            </left>
+            <right>
+                <projections start-index="38" stop-index="38">
+                    <shorthand-projection start-index="38" stop-index="38" />
+                </projections>
+                <from>
+                    <simple-table name="t2" start-index="45" stop-index="46" />
+                </from>
+            </right>
+        </combine>
+    </select>
+
+    <select sql-case-id="hive_select_union_distinct">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <simple-table name="t1" start-index="14" stop-index="15" />
+        </from>
+        <combine combine-type="UNION" start-index="17" stop-index="47">
+            <left>
+                <projections start-index="7" stop-index="7">
+                    <shorthand-projection start-index="7" stop-index="7" />
+                </projections>
+                <from>
+                    <simple-table name="t1" start-index="14" stop-index="15" />
+                </from>
+            </left>
+            <right>
+                <projections start-index="39" stop-index="39">
+                    <shorthand-projection start-index="39" stop-index="39" />
+                </projections>
+                <from>
+                    <simple-table name="t2" start-index="46" stop-index="47" />
+                </from>
+            </right>
+        </combine>
+    </select>
+
+    <select sql-case-id="hive_select_struct_field">
+        <projections start-index="7" stop-index="22">
+            <column-projection name="name" start-index="7" stop-index="22">
+                <owner name="type_struct" start-index="7" stop-index="17" />
+            </column-projection>
+        </projections>
+        <from>
+            <simple-table name="t_data_type_struct" start-index="29" stop-index="46" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_array_item">
+        <projections start-index="7" stop-index="19">
+            <expression-projection text="type_array[0]" start-index="7" stop-index="19">
+                <expr>
+                    <function function-name="[]" text="type_array[0]" start-index="7" stop-index="19">
+                        <parameter>
+                            <column name="type_array" start-index="7" stop-index="16" />
+                        </parameter>
+                        <parameter>
+                            <literal-expression value="0" start-index="18" stop-index="18" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+        <from>
+            <simple-table name="t_data_type_array" start-index="26" stop-index="42" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_map_item">
+        <projections start-index="7" stop-index="19">
+            <expression-projection text="type_map['a']" start-index="7" stop-index="19">
+                <expr>
+                    <function function-name="[]" text="type_map['a']" start-index="7" stop-index="19">
+                        <parameter>
+                            <column name="type_map" start-index="7" stop-index="14" />
+                        </parameter>
+                        <parameter>
+                            <literal-expression value="a" start-index="16" stop-index="18" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+        <from>
+            <simple-table name="t_data_type_map" start-index="26" stop-index="40" />
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_dayofweek_function">
+        <projections start-index="7" stop-index="54">
+            <expression-projection alias="creation_day_of_week" text="dayofweek(creation_date)" start-index="7" stop-index="54">
+                <expr>
+                    <function function-name="dayofweek" text="dayofweek(creation_date)" start-index="7" stop-index="30">
+                        <parameter>
+                            <column name="creation_date" start-index="17" stop-index="29" />
+                        </parameter>
+                    </function>
+                </expr>
+            </expression-projection>
+        </projections>
+        <from>
+            <simple-table name="t_order" start-index="61" stop-index="67" />
+        </from>
+        <order-by>
+            <column-item name="order_id" order-direction="ASC" start-index="78" stop-index="85" />
+        </order-by>
+    </select>
+
+    <select sql-case-id="hive_select_lateral_view_explode">
+        <projections start-index="7" stop-index="31">
+            <column-projection name="id" start-index="7" stop-index="19">
+                <owner name="data_array" start-index="7" stop-index="16" />
+            </column-projection>
+            <column-projection name="item_value" start-index="22" stop-index="31" />
+        </projections>
+        <from>
+            <join-table join-type="COMMA" start-index="38" stop-index="127">
+                <left>
+                    <simple-table name="t_data_type_array" alias="data_array" start-index="38" stop-index="65" />
+                </left>
+                <right>
+                    <function-table table-alias="exploded_array" start-index="67" stop-index="127">
+                        <table-function function-name="explode" text="explode(type_array)" start-index="80" stop-index="98">
+                            <parameter>
+                                <column name="type_array" start-index="88" stop-index="97" />
+                            </parameter>
+                        </table-function>
+                    </function-table>
+                </right>
+            </join-table>
+        </from>
+    </select>
+
+    <select sql-case-id="hive_select_lateral_view_without_column_alias">
+        <projections start-index="7" stop-index="7">
+            <shorthand-projection start-index="7" stop-index="7" />
+        </projections>
+        <from>
+            <join-table join-type="COMMA" start-index="14" stop-index="89">
+                <left>
+                    <simple-table name="t_data_type_array" alias="data_array" start-index="14" stop-index="41" />
+                </left>
+                <right>
+                    <function-table table-alias="exploded_array" start-index="43" stop-index="89">
+                        <table-function function-name="explode" text="explode(type_array)" start-index="56" stop-index="74">
+                            <parameter>
+                                <column name="type_array" start-index="64" stop-index="73" />
+                            </parameter>
+                        </table-function>
+                    </function-table>
+                </right>
+            </join-table>
+        </from>
+    </select>
+
+</sql-parser-test-cases>

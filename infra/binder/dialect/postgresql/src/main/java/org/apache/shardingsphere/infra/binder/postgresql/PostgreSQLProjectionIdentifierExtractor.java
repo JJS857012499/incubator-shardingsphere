@@ -1,0 +1,82 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.infra.binder.postgresql;
+
+import org.apache.shardingsphere.database.connector.core.metadata.database.enums.QuoteCharacter;
+import org.apache.shardingsphere.infra.binder.context.segment.select.projection.extractor.DialectProjectionIdentifierExtractor;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.ExpressionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.expr.FunctionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.AggregationProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.ExpressionProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.item.SubqueryProjectionSegment;
+import org.apache.shardingsphere.sql.parser.statement.core.value.identifier.IdentifierValue;
+
+/**
+ * Projection identifier extractor for PostgreSQL.
+ */
+public final class PostgreSQLProjectionIdentifierExtractor implements DialectProjectionIdentifierExtractor {
+    
+    @Override
+    public String getIdentifierValue(final IdentifierValue identifierValue) {
+        return PostgreSQLIdentifierUtils.isUnicodeQuoted(identifierValue.getValue())
+                ? PostgreSQLIdentifierUtils.unquoteUnicode(identifierValue.getValue())
+                : PostgreSQLIdentifierUtils.fold(identifierValue.getValue());
+    }
+    
+    @Override
+    public String getColumnNameFromFunction(final String functionName, final String functionExpression) {
+        return PostgreSQLIdentifierUtils.fold(functionName);
+    }
+    
+    @Override
+    public String getColumnNameFromExpression(final ExpressionSegment expressionSegment) {
+        if (!(expressionSegment instanceof ExpressionProjectionSegment)) {
+            return "?column?";
+        }
+        ExpressionSegment innerExpressionSegment = ((ExpressionProjectionSegment) expressionSegment).getExpr();
+        if (innerExpressionSegment instanceof FunctionSegment) {
+            return getColumnNameFromFunctionSegment((FunctionSegment) innerExpressionSegment);
+        }
+        if (innerExpressionSegment instanceof AggregationProjectionSegment) {
+            AggregationProjectionSegment aggregationProjectionSegment = (AggregationProjectionSegment) innerExpressionSegment;
+            return getColumnNameFromFunction(aggregationProjectionSegment.getType().name(), aggregationProjectionSegment.getExpression());
+        }
+        return "?column?";
+    }
+    
+    private String getColumnNameFromFunctionSegment(final FunctionSegment functionSegment) {
+        if (PostgreSQLIdentifierUtils.isUnicodeQuoted(functionSegment.getFunctionName())) {
+            return PostgreSQLIdentifierUtils.unquoteUnicode(functionSegment.getFunctionName());
+        }
+        IdentifierValue functionName = new IdentifierValue(functionSegment.getFunctionName());
+        return QuoteCharacter.NONE == functionName.getQuoteCharacter()
+                ? getColumnNameFromFunction(functionName.getValue(), functionSegment.getText())
+                : functionName.getValue();
+    }
+    
+    @Override
+    public String getColumnNameFromSubquery(final SubqueryProjectionSegment subquerySegment) {
+        // TODO support subquery projection
+        return subquerySegment.getText();
+    }
+    
+    @Override
+    public String getDatabaseType() {
+        return "PostgreSQL";
+    }
+}

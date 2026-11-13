@@ -1,0 +1,121 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.sharding.route.engine;
+
+import org.apache.shardingsphere.infra.annotation.HighFrequencyInvocation;
+import org.apache.shardingsphere.infra.binder.context.statement.SQLStatementContext;
+import org.apache.shardingsphere.infra.binder.context.statement.type.dal.ExplainStatementContext;
+import org.apache.shardingsphere.infra.binder.context.statement.type.dml.SelectStatementContext;
+import org.apache.shardingsphere.infra.config.props.ConfigurationProperties;
+import org.apache.shardingsphere.infra.hint.HintManager;
+import org.apache.shardingsphere.infra.metadata.database.ShardingSphereDatabase;
+import org.apache.shardingsphere.infra.metadata.database.rule.RuleMetaData;
+import org.apache.shardingsphere.infra.route.context.RouteContext;
+import org.apache.shardingsphere.infra.route.lifecycle.EntranceSQLRouter;
+import org.apache.shardingsphere.infra.session.query.QueryContext;
+import org.apache.shardingsphere.sharding.api.config.strategy.sharding.HintShardingStrategyConfiguration;
+import org.apache.shardingsphere.sharding.constant.ShardingOrder;
+import org.apache.shardingsphere.sharding.route.engine.checker.ShardingRouteContextCheckerFactory;
+import org.apache.shardingsphere.sharding.route.engine.condition.ShardingCondition;
+import org.apache.shardingsphere.sharding.route.engine.condition.ShardingConditions;
+import org.apache.shardingsphere.sharding.route.engine.condition.engine.ShardingConditionEngine;
+import org.apache.shardingsphere.sharding.route.engine.type.ShardingRouteEngineFactory;
+import org.apache.shardingsphere.sharding.rule.ShardingRule;
+import org.apache.shardingsphere.sharding.rule.ShardingTable;
+import org.apache.shardingsphere.sql.parser.statement.core.statement.SQLStatement;
+import org.apache.shardingsphere.sql.parser.statement.core.statement.attribute.type.CursorSQLStatementAttribute;
+import org.apache.shardingsphere.sql.parser.statement.core.statement.type.dml.DMLStatement;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * Sharding SQL router.
+ */
+@HighFrequencyInvocation
+public final class ShardingSQLRouter implements EntranceSQLRouter<ShardingRule> {
+    
+    @Override
+    public RouteContext createRouteContext(final QueryContext queryContext, final RuleMetaData globalRuleMetaData, final ShardingSphereDatabase database,
+                                           final ShardingRule rule, final Collection<String> tableNames, final ConfigurationProperties props) {
+        Collection<String> logicTableNames = rule.getShardingLogicTableNames(tableNames);
+        if (logicTableNames.isEmpty()) {
+            return new RouteContext();
+        }
+        SQLStatement sqlStatement = queryContext.getSqlStatementContext().getSqlStatement();
+        SQLStatementContext routingSQLStatementContext = getRoutingSQLStatementContext(queryContext.getSqlStatementContext(), rule, logicTableNames);
+        ShardingConditions shardingConditions = createShardingConditions(routingSQLStatementContext, queryContext.getParameters(), globalRuleMetaData, database, rule);
+        if (routingSQLStatementContext.getSqlStatement() instanceof DMLStatement && shardingConditions.isNeedMerge()) {
+            shardingConditions.merge();
+        }
+        RouteContext result = ShardingRouteEngineFactory.newInstance(rule, database, queryContext, shardingConditions, logicTableNames, props).route(rule);
+        checkRouteContext(queryContext, database, rule, props, sqlStatement, shardingConditions, result);
+        return result;
+    }
+    
+    private SQLStatementContext getRoutingSQLStatementContext(final SQLStatementContext sqlStatementContext, final ShardingRule rule, final Collection<String> logicTableNames) {
+        if (!(sqlStatementContext instanceof ExplainStatementContext) || !"MySQL".equals(sqlStatementContext.getSqlStatement().getDatabaseType().getType())) {
+            return sqlStatementContext;
+        }
+        SQLStatementContext explainableSQLStatementContext = ((ExplainStatementContext) sqlStatementContext).getExplainableSQLStatementContext();
+        if (!(explainableSQLStatementContext instanceof SelectStatementContext) || 1 != logicTableNames.size() || 1 != explainableSQLStatementContext.getTablesContext().getSimpleTables().size()
+                || ((SelectStatementContext) explainableSQLStatementContext).isContainsJoinQuery()) {
+            return sqlStatementContext;
+        }
+        return hasShardingHint(rule, logicTableNames.iterator().next()) ? explainableSQLStatementContext : sqlStatementContext;
+    }
+    
+    private boolean hasShardingHint(final ShardingRule rule, final String logicTableName) {
+        ShardingTable shardingTable = rule.getShardingTable(logicTableName);
+        boolean databaseHint = rule.getDatabaseShardingStrategyConfiguration(shardingTable) instanceof HintShardingStrategyConfiguration
+                && !(HintManager.isDatabaseShardingOnly() ? HintManager.getDatabaseShardingValues() : HintManager.getDatabaseShardingValues(logicTableName)).isEmpty();
+        return databaseHint || rule.getTableShardingStrategyConfiguration(shardingTable) instanceof HintShardingStrategyConfiguration && !HintManager.getTableShardingValues(logicTableName).isEmpty();
+    }
+    
+    private ShardingConditions createShardingConditions(final SQLStatementContext sqlStatementContext, final List<Object> params, final RuleMetaData globalRuleMetaData,
+                                                        final ShardingSphereDatabase database, final ShardingRule rule) {
+        List<ShardingCondition> shardingConditions;
+        if (sqlStatementContext.getSqlStatement() instanceof DMLStatement || sqlStatementContext.getSqlStatement().getAttributes().findAttribute(CursorSQLStatementAttribute.class).isPresent()) {
+            shardingConditions = new ShardingConditionEngine(globalRuleMetaData, database, rule).createShardingConditions(sqlStatementContext, params);
+        } else {
+            shardingConditions = Collections.emptyList();
+        }
+        return new ShardingConditions(shardingConditions, sqlStatementContext, rule);
+    }
+    
+    private void checkRouteContext(final QueryContext queryContext, final ShardingSphereDatabase database, final ShardingRule rule, final ConfigurationProperties props,
+                                   final SQLStatement sqlStatement, final ShardingConditions shardingConditions, final RouteContext routeContext) {
+        ShardingRouteContextCheckerFactory.newInstance(sqlStatement, shardingConditions).ifPresent(optional -> optional.check(rule, queryContext, database, props, routeContext));
+    }
+    
+    @Override
+    public Type getType() {
+        return Type.DATA_NODE;
+    }
+    
+    @Override
+    public int getOrder() {
+        return ShardingOrder.ORDER;
+    }
+    
+    @Override
+    public Class<ShardingRule> getTypeClass() {
+        return ShardingRule.class;
+    }
+}

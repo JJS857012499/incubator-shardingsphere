@@ -16,245 +16,404 @@
   ~ limitations under the License.
   -->
 
-<!DOCTYPE module PUBLIC "-//Puppy Crawl//DTD Check Configuration 1.3//EN" "http://checkstyle.sourceforge.net/dtds/configuration_1_3.dtd">
-<module name = "Checker">
-    <property name="charset" value="UTF-8"/>
-    <property name="severity" value="warning"/>
-    <property name="fileExtensions" value="java, properties, xml"/>
+<!DOCTYPE module PUBLIC "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN" "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<module name="Checker">
+    <property name="severity" value="error" />
+    <property name="fileExtensions" value="java, xml, properties" />
+    
     <module name="Header">
-        <property name="fileExtensions" value="java"/>
+        <property name="fileExtensions" value="java" />
     </module>
     <module name="FileTabCharacter">
-        <property name="eachLine" value="true"/>
+        <property name="eachLine" value="true" />
     </module>
-    <module name="FileLength"/>
+    <module name="FileLength">
+        <property name="max" value="10000" />
+    </module>
+    <module name="LineLength">
+        <property name="fileExtensions" value="java" />
+        <property name="max" value="200" />
+    </module>
+    <module name="LineEnding">
+        <property name="lineEnding" value="lf" />
+    </module>
     <module name="NewlineAtEndOfFile">
-        <property name="lineSeparator" value="lf"/>
+        <property name="lineSeparator" value="lf" />
     </module>
-    <module name="Translation"/>
-    <module name="UniqueProperties"/>
-    <module name="SeverityMatchFilter"/>
-    
+    <module name="Translation" />
+    <module name="UniqueProperties" />
     <module name="TreeWalker">
-        
-        <!-- Naming Conventions -->
-        <module name="PackageName">
-            <property name="format" value="^[a-z]+(\.[a-z][a-z0-9]*)*$"/>
+        <module name="SuppressionCommentFilter" />
+        <module name="SuppressionXpathSingleFilter">
+            <property name="checks" value="FinalClass" />
+            <property name="query" value="//CLASS_DEF[./MODIFIERS/LITERAL_PRIVATE]" />
         </module>
-        <module name="TypeName"/>
-        <module name="MethodName"/>
-        <module name="InterfaceTypeParameterName"/>
-        <module name="ClassTypeParameterName"/>
-        <module name="MethodTypeParameterName"/>
-        <module name="ConstantName"/>
-        <module name="StaticVariableName"/>
-        <module name="MemberName"/>
-        <module name="LocalVariableName"/>
-        <module name="LocalFinalVariableName"/>
-        <module name="ParameterName"/>
-        <module name="CatchParameterName"/>
-        <module name="AbbreviationAsWordInName">
-            <property name="allowedAbbreviationLength" value="6"/>
-        </module>
-        
-        <!-- Size Violations -->
-        <module name="AnonInnerLength"/>
-        <module name="MethodLength"/>
-        <module name="LineLength">
-            <property name="max" value="200"/>
-        </module>
-        <module name="MethodCount"/>
-        <module name="ExecutableStatementCount">
-            <property name="max" value="50"/>
-        </module>
-        <module name="OuterTypeNumber"/>
-        <module name="ParameterNumber"/>
-
-        <!-- Whitespace -->
-        <module name="EmptyForInitializerPad"/>
-        <module name="EmptyForIteratorPad"/>
-        <module name="MethodParamPad"/>
-        <module name="ParenPad"/>
-        <module name="TypecastParenPad"/>
-        <module name="NoLineWrap"/>
-        <module name="OperatorWrap"/>
-        <module name="SeparatorWrap">
-            <property name="id" value="SeparatorWrapDot"/>
-            <property name="tokens" value="DOT"/>
-            <property name="option" value="nl"/>
-        </module>
-        <module name="SeparatorWrap">
-            <property name="id" value="SeparatorWrapComma"/>
-            <property name="tokens" value="COMMA"/>
-            <property name="option" value="EOL"/>
-        </module>
-        <module name="SeparatorWrap">
-            <property name="id" value="SeparatorWrapEllipsis"/>
-            <property name="tokens" value="ELLIPSIS"/>
-            <property name="option" value="EOL"/>
-        </module>
-        <module name="SeparatorWrap">
-            <property name="id" value="SeparatorWrapArrayDeclarator"/>
-            <property name="tokens" value="ARRAY_DECLARATOR"/>
-            <property name="option" value="EOL"/>
-        </module>
-        <module name="SeparatorWrap">
-            <property name="id" value="SeparatorWrapMethodRef"/>
-            <property name="tokens" value="METHOD_REF"/>
-            <property name="option" value="nl"/>
-        </module>
-        <module name="GenericWhitespace"/>
-        <module name="NoWhitespaceBefore"/>
-        <module name="NoWhitespaceAfter"/>
-        <module name="WhitespaceAround"/>
-        <module name="WhitespaceAfter"/>
-        <module name="SingleSpaceSeparator"/>
-        <module name="EmptyLineSeparator">
-            <property name="allowMultipleEmptyLines" value="false"/>
-            <property name="allowMultipleEmptyLinesInsideClassMembers" value="false"/>
-        </module>
-        
-        <!-- Imports -->
-        <module name="AvoidStarImport"/>
-        <module name="AvoidStaticImport">
-            <property name="excludes" value="org.junit.Assert.*,org.hamcrest.CoreMatchers.*,org.mockito.Mockito.*,org.mockito.ArgumentMatchers.*"/>
-        </module>
-        <module name="IllegalImport"/>
-        <module name="RedundantImport"/>
-        <module name="UnusedImports"/>
-        <module name="CustomImportOrder"/>
         
         <!-- Annotations -->
         <module name="AnnotationLocation">
-            <property name="id" value="AnnotationLocationMostCases"/>
-            <property name="tokens" value="CLASS_DEF, INTERFACE_DEF, ENUM_DEF, METHOD_DEF, CTOR_DEF"/>
+            <property name="id" value="AnnotationLocationMostCases" />
+            <property name="tokens" value="CLASS_DEF, INTERFACE_DEF, ENUM_DEF, METHOD_DEF, CTOR_DEF" />
         </module>
         <module name="AnnotationLocation">
-            <property name="id" value="AnnotationLocationVariables"/>
-            <property name="tokens" value="VARIABLE_DEF"/>
-            <property name="allowSamelineMultipleAnnotations" value="true"/>
+            <property name="id" value="AnnotationLocationVariables" />
+            <property name="tokens" value="VARIABLE_DEF" />
+            <property name="allowSamelineMultipleAnnotations" value="true" />
         </module>
-        <module name="AnnotationUseStyle"/>
-        <module name="MissingOverride"/>
-        <module name="SuppressWarnings"/>
-        <module name="MissingDeprecated"/>
-        <module name="SuppressWarningsHolder"/>
-
-        <!-- Modifiers -->
-        <module name="ModifierOrder"/>
-        <module name="RedundantModifier"/>
-        
-        <!-- Coding -->
-        <module name="ArrayTrailingComma"/>
-        <module name="CovariantEquals"/>
-        <module name="DefaultComesLast"/>
-        <module name="DeclarationOrder"/>
-        <module name="EmptyStatement"/>
-        <module name="EqualsAvoidNull"/>
-        <module name="EqualsHashCode"/>
-        <module name="ExplicitInitialization"/>
-        <module name="FallThrough"/>
-        <module name="IllegalInstantiation"/>
-        <module name="IllegalCatch"/>
-        <module name="IllegalThrows"/>
-        <module name="IllegalType">
-            <property name="tokens" value="METHOD_DEF,PARAMETER_DEF,VARIABLE_DEF"/>
+        <module name="AnnotationUseStyle" />
+        <module name="MatchXpath">
+            <property name="query" value="//MODIFIERS[FINAL/following-sibling::ANNOTATION]" />
+            <message key="matchxpath.match" value="Place annotations before the final modifier." />
         </module>
-        <module name="IllegalTokenText">
-            <property name="tokens" value="STRING_LITERAL, CHAR_LITERAL"/>
-            <property name="format" value="\\u00(09|0(a|A)|0(c|C)|0(d|D)|22|27|5(C|c))|\\(0(10|11|12|14|15|42|47)|134)"/>
-            <property name="message" value="Consider using special escape sequence instead of octal value or Unicode escaped value."/>
+        <module name="MissingDeprecated" />
+        <module name="MissingOverride" />
+        <module name="MissingOverrideOnRecordAccessor" />
+        <module name="PackageAnnotation" />
+        <module name="SuppressWarnings">
+            <property name="format" value="^(?i:all)$" />
         </module>
-        <module name="MissingSwitchDefault"/>
-        <module name="ModifiedControlVariable"/>
-        <module name="MultipleVariableDeclarations"/>
-        <module name="NestedForDepth"/>
-        <module name="NestedIfDepth"/>
-        <module name="NestedTryDepth"/>
-        <module name="NoClone"/>
-        <module name="NoFinalizer"/>
-        <module name="SuperClone"/>
-        <module name="SuperFinalize"/>
-        <module name="OneStatementPerLine"/>
-        <module name="OverloadMethodsDeclarationOrder"/>
-        <module name="PackageDeclaration"/>
-        <module name="ParameterAssignment"/>
-        <module name="SimplifyBooleanExpression"/>
-        <module name="SimplifyBooleanReturn"/>
-        <module name="StringLiteralEquality"/>
-        <module name="UnnecessaryParentheses"/>
-        <module name="VariableDeclarationUsageDistance"/>
+        <module name="SuppressWarningsHolder" />
         
         <!-- Block Checks -->
-        <module name="EmptyBlock"/>
+        <module name="AvoidNestedBlocks" />
+        <module name="EmptyBlock" />
         <module name="EmptyCatchBlock">
-            <property name="exceptionVariableName" value="expected|ignore"/>
+            <property name="exceptionVariableName" value="expected|ignore" />
         </module>
-        <module name="AvoidNestedBlocks"/>
-        <module name="NeedBraces"/>
-        <module name="LeftCurly"/>
-        <module name="RightCurly"/>
+        <module name="LeftCurly" />
+        <module name="RightCurly" />
+        <module name="RightCurly">
+            <property name="id" value="RightCurlySwitch" />
+            <property name="tokens" value="LITERAL_SWITCH, LITERAL_CASE, LITERAL_DEFAULT" />
+        </module>
+        <module name="NeedBraces" />
         
         <!-- Class Design -->
-        <module name="DesignForExtension"/>
-        <module name="FinalClass"/>
-        <!-- cannot recognize for lombok @NoArgsConstructor(access = AccessLevel.PRIVATE), just ignore -->
-        <!--<module name="HideUtilityClassConstructor"/>-->
-        <module name="OneTopLevelClass"/>
-        <module name="InterfaceIsType"/>
-        <module name="InnerTypeLast"/>
-        <module name="VisibilityModifier"/>
-        <module name="MutableException"/>
-        <module name="ThrowsCount"/>
-        
-        <!-- Metrics -->
-        <module name="BooleanExpressionComplexity"/>
-        <module name="ClassDataAbstractionCoupling">
-            <property name="max" value="10"/>
+        <module name="FinalClass" />
+        <module name="MatchXpath">
+            <property name="query" value="//CLASS_DEF[./IDENT[ends-with(@text, 'Test')]]/MODIFIERS/FINAL" />
+            <message key="matchxpath.match" value="Unit-test classes must not be declared final." />
         </module>
-        <module name="ClassFanOutComplexity"/>
-        <module name="CyclomaticComplexity"/>
-        <module name="NPathComplexity"/>
-        <module name="JavaNCSS"/>
+        <!-- cannot recognize for lombok @NoArgsConstructor(access = AccessLevel.PRIVATE), just ignore -->
+        <!--<module name="HideUtilityClassConstructor" />-->
+        <module name="InnerTypeLast" />
+        <module name="InterfaceIsType" />
+        <module name="MutableException" />
+        <module name="OneTopLevelClass" />
+        <module name="ThrowsCount">
+            <property name="ignorePrivateMethods" value="false" />
+        </module>
+        <module name="VisibilityModifier" />
         
-        <!-- Miscellaneous -->
-        <module name="ArrayTypeStyle"/>
-        <module name="UpperEll"/>
-        <module name="AvoidEscapedUnicodeCharacters"/>
-        <module name="DescendantToken"/>
-        <module name="FinalParameters"/>
-        <module name="Indentation"/>
-        <module name="OuterTypeFilename"/>
-        <module name="TodoComment"/>
-        <module name="TrailingComment"/>
-        <module name="UncommentedMain">
-            <property name="excludedClasses" value="\.Bootstrap"/>
+        <!-- Coding -->
+        <module name="AvoidDoubleBraceInitialization" />
+        <module name="AvoidNoArgumentSuperConstructorCall" />
+        <module name="CovariantEquals" />
+        <module name="DeclarationOrder" />
+        <module name="DefaultComesLast" />
+        <module name="EmptyStatement" />
+        <module name="EqualsAvoidNull" />
+        <module name="EqualsHashCode" />
+        <module name="ExplicitInitialization" />
+        <module name="FallThrough" />
+        <module name="IllegalCatch" />
+        <module name="IllegalInstantiation" />
+        <module name="IllegalThrows" />
+        <module name="IllegalToken" />
+        <module name="IllegalTokenText">
+            <property name="tokens" value="STRING_LITERAL, CHAR_LITERAL" />
+            <property name="format" value="\\u00(09|0(a|A)|0(c|C)|0(d|D)|22|27|5(C|c))|\\(0(10|11|12|14|15|42|47)|134)" />
+            <property name="message" value="Consider using special escape sequence instead of octal value or Unicode escaped value." />
+        </module>
+        <module name="MatchXpath">
+            <property name="query" value="//METHOD_CALL[(./IDENT[@text='assertThat'] or ./DOT/IDENT[@text='assertThat']) and ./ELIST/EXPR[last()]/METHOD_CALL[(./IDENT[@text='is'] or ./DOT/IDENT[@text='is']) and ./ELIST/EXPR/*[self::LITERAL_TRUE or self::LITERAL_FALSE or self::DOT[./IDENT[@text=('TRUE', 'FALSE')] and (./IDENT[@text='Boolean'] or ./DOT[./IDENT[@text='Boolean'] and ./DOT[./IDENT[@text='java'] and ./IDENT[@text='lang']]])]]]]" />
+            <message key="matchxpath.match" value="Use assertTrue/assertFalse instead of assertThat(..., is(true/false))." />
+        </module>
+        <module name="MatchXpath">
+            <property name="query"
+                      value="//METHOD_DEF[./MODIFIERS/ANNOTATION[(./IDENT[@text='Test'] or ./DOT/IDENT[@text='Test'] or ./IDENT[@text='ParameterizedTest'] or ./DOT/IDENT[@text='ParameterizedTest'] or ./IDENT[@text='RepeatedTest'] or ./DOT/IDENT[@text='RepeatedTest'] or ./IDENT[@text='TestFactory'] or ./DOT/IDENT[@text='TestFactory'] or ./IDENT[@text='TestTemplate'] or ./DOT/IDENT[@text='TestTemplate'])] and not(./IDENT[starts-with(@text, 'assert')])]" />
+            <message key="matchxpath.match" value="Test method names must start with 'assert'." />
+        </module>
+        <module name="MatchXpath">
+            <property name="query" value="//VARIABLE_DEF[./MODIFIERS/FINAL and (parent::FOR_INIT or parent::FOR_EACH_CLAUSE)]" />
+            <message key="matchxpath.match" value="Do not declare for-loop variables as final." />
+        </module>
+        <module name="MatchXpath">
+            <property name="query" value="//*[self::EQUAL or self::NOT_EQUAL][./*[last()][self::LITERAL_NULL]]" />
+            <message key="matchxpath.match" value="Place null on the left side of == and != comparisons." />
+        </module>
+        <module name="MatchXpath">
+            <property name="query" value="//QUESTION[./*[1][self::NOT_EQUAL and ./*[1][self::LITERAL_NULL]]]" />
+            <message key="matchxpath.match" value="Use null == value and put the null-result branch first in ternary expressions." />
+        </module>
+        <module name="MatchXpath">
+            <property name="query" value="//ANNOTATION[((./IDENT[@text='SneakyThrows'] and ancestor::COMPILATION_UNIT/IMPORT/DOT[./IDENT[@text='lombok'] and ./IDENT[@text='SneakyThrows']]) or ./DOT[./IDENT[@text='lombok'] and ./IDENT[@text='SneakyThrows']]) and not(.//LITERAL_CLASS)]" />
+            <message key="matchxpath.match" value="Specify exception types in @SneakyThrows or remove the annotation." />
+        </module>
+        <module name="IllegalType" />
+        <module name="IllegalType">
+            <property name="tokens" value="IMPORT, PARAMETER_DEF" />
+            <property name="illegalClassNames" value="java.util.Map.Entry" />
+            <message key="illegal.type" value="Do not declare Map.Entry as a parameter." />
+        </module>
+        <module name="MissingSwitchDefault" />
+        <module name="ModifiedControlVariable" />
+        <module name="MultipleVariableDeclarations" />
+        <module name="NestedForDepth">
+            <property name="severity" value="warning" />
+        </module>
+        <module name="NestedIfDepth" />
+        <module name="NestedTryDepth" />
+        <module name="NoArrayTrailingComma" />
+        <module name="NoClone" />
+        <module name="NoEnumTrailingComma" />
+        <module name="NoFinalizer" />
+        <module name="OneStatementPerLine" />
+        <module name="OverloadMethodsDeclarationOrder" />
+        <module name="PackageDeclaration" />
+        <module name="ParameterAssignment" />
+        <module name="RequireThis" />
+        <module name="SimplifyBooleanExpression" />
+        <module name="SimplifyBooleanReturn" />
+        <module name="StringLiteralEquality" />
+        <module name="SuperClone" />
+        <module name="SuperFinalize" />
+        <module name="UnnecessaryParentheses" />
+        <module name="UnnecessarySemicolonAfterOuterTypeDeclaration" />
+        <module name="UnnecessarySemicolonAfterTypeMemberDeclaration" />
+        <module name="UnnecessarySemicolonInEnumeration" />
+        <module name="UnnecessarySemicolonInTryWithResources" />
+        <module name="UnusedLocalVariable">
+            <property name="jdkVersion" value="21" />
+        </module>
+        <module name="VariableDeclarationUsageDistance">
+            <property name="allowedDistance" value="7" />
+        </module>
+        <module name="RegexpSinglelineJava">
+            <property name="format" value="^(?!\s*import\s+java\.util\.Map\.Entry\s*;).*\b(?:java\.util\.)?Map\.Entry\b" />
+            <property name="ignoreComments" value="true" />
+            <property name="message" value="Use Entry instead of Map.Entry (import java.util.Map.Entry)." />
+        </module>
+        <module name="RegexpSinglelineJava">
+            <property name="format" value="\bObjects\.(?:isNull|nonNull)\s*\(" />
+            <property name="ignoreComments" value="true" />
+            <property name="message" value="Use a direct null comparison instead of Objects.isNull or Objects.nonNull." />
+        </module>
+        <module name="RegexpSinglelineJava">
+            <property name="format" value="\btimes\s*\(\s*0\s*\)" />
+            <property name="ignoreComments" value="true" />
+            <property name="message" value="Use never() instead of times(0)." />
+        </module>
+        <module name="RegexpSinglelineJava">
+            <property name="format" value="^(?!\s*import\s+org\.apache\.shardingsphere\.infra\.util\.props\.PropertiesBuilder\.Property\s*;).*\bPropertiesBuilder\.Property\b" />
+            <property name="ignoreComments" value="true" />
+            <property name="message" value="Import and use Property instead of PropertiesBuilder.Property." />
+        </module>
+        
+        <!-- Imports -->
+        <module name="AvoidStarImport" />
+        <module name="AvoidStaticImport">
+            <property name="excludes" value="org.junit.jupiter.api.Assertions.assertTrue,org.junit.jupiter.api.Assertions.assertFalse,org.junit.jupiter.api.Assertions.assertNull,org.junit.jupiter.api.Assertions.assertNotNull,org.junit.jupiter.api.Assertions.assertThrows,org.junit.jupiter.api.Assertions.assertDoesNotThrow,org.junit.jupiter.api.Assertions.assertTimeout,org.junit.jupiter.api.Assertions.assertTimeoutPreemptively,org.junit.jupiter.api.Assertions.fail,org.junit.jupiter.api.Assumptions.assumeTrue,org.hamcrest.CoreMatchers.anyOf,org.hamcrest.Matchers.arrayContaining,org.hamcrest.Matchers.closeTo,org.hamcrest.Matchers.contains,org.hamcrest.Matchers.containsInAnyOrder,org.hamcrest.Matchers.containsString,org.hamcrest.Matchers.endsWith,org.hamcrest.Matchers.allOf,org.hamcrest.Matchers.greaterThan,org.hamcrest.Matchers.greaterThanOrEqualTo,org.hamcrest.Matchers.hasEntry,org.hamcrest.Matchers.hasItem,org.hamcrest.Matchers.hasItems,org.hamcrest.Matchers.hasKey,org.hamcrest.Matchers.is,org.hamcrest.Matchers.isA,org.hamcrest.Matchers.lessThan,org.hamcrest.Matchers.lessThanOrEqualTo,org.hamcrest.Matchers.matchesPattern,org.hamcrest.Matchers.not,org.hamcrest.Matchers.sameInstance,org.hamcrest.Matchers.startsWith,org.hamcrest.Matchers.anyOf,org.hamcrest.MatcherAssert.assertThat,org.apache.shardingsphere.test.infra.framework.matcher.ShardingSphereArgumentVerifyMatchers.deepEq,org.apache.shardingsphere.test.infra.framework.matcher.ShardingSphereAssertionMatchers.deepEqual,org.mockito.Mockito.CALLS_REAL_METHODS,org.mockito.Mockito.RETURNS_DEEP_STUBS,org.mockito.Mockito.any,org.mockito.Mockito.anyBoolean,org.mockito.Mockito.anyCollection,org.mockito.Mockito.anyInt,org.mockito.Mockito.anyList,org.mockito.Mockito.anyLong,org.mockito.Mockito.anyString,org.mockito.Mockito.argThat,org.mockito.Mockito.eq,org.mockito.Mockito.isNull,org.mockito.Mockito.atLeast,org.mockito.Mockito.atLeastOnce,org.mockito.Mockito.clearInvocations,org.mockito.Mockito.doAnswer,org.mockito.Mockito.doNothing,org.mockito.Mockito.doReturn,org.mockito.Mockito.doThrow,org.mockito.Mockito.inOrder,org.mockito.Mockito.lenient,org.mockito.Mockito.mock,org.mockito.Mockito.mockConstruction,org.mockito.Mockito.mockingDetails,org.mockito.Mockito.mockStatic,org.mockito.Mockito.never,org.mockito.Mockito.reset,org.mockito.Mockito.spy,org.mockito.Mockito.timeout,org.mockito.Mockito.times,org.mockito.Mockito.verify,org.mockito.Mockito.verifyNoInteractions,org.mockito.Mockito.verifyNoMoreInteractions,org.mockito.Mockito.when,org.mockito.Mockito.withSettings,org.mockito.ArgumentMatchers.any,org.mockito.ArgumentMatchers.anyBoolean,org.mockito.ArgumentMatchers.anyCollection,org.mockito.ArgumentMatchers.anyInt,org.mockito.ArgumentMatchers.anyList,org.mockito.ArgumentMatchers.anyLong,org.mockito.ArgumentMatchers.anyMap,org.mockito.ArgumentMatchers.anySet,org.mockito.ArgumentMatchers.anyString,org.mockito.ArgumentMatchers.argThat,org.mockito.ArgumentMatchers.contains,org.mockito.ArgumentMatchers.eq,org.mockito.ArgumentMatchers.isA,org.mockito.ArgumentMatchers.isNull,org.mockito.ArgumentMatchers.matches,org.mockito.ArgumentMatchers.nullable,org.mockito.ArgumentMatchers.refEq,org.mockito.ArgumentMatchers.same" />
+        </module>
+        <module name="RegexpSinglelineJava">
+            <property name="format" value="^(?!\s*import\s+static\s+).*\b(Mockito|ArgumentMatchers|Assertions|Assumptions|CoreMatchers|Matchers|MatcherAssert|ShardingSphereArgumentVerifyMatchers|ShardingSphereAssertionMatchers)\s*(\.|::)" />
+            <property name="ignoreComments" value="true" />
+            <property name="message" value="Use an allowed static import instead of a qualified static member call." />
+        </module>
+        <module name="IllegalImport">
+            <property name="regexp" value="true" />
+            <property name="illegalPkgs" value="sun,.*[.]shaded" />
+            <property name="illegalClasses" value=".*[.]StringUtils([.].*)?,.*[.]CollectionUtils([.].*)?,org[.]junit[.]jupiter[.]api[.](Assertions|Assumptions),org[.]hamcrest[.](CoreMatchers|MatcherAssert|Matchers),org[.]mockito[.](ArgumentMatchers|Mockito),org[.]apache[.]shardingsphere[.]test[.]infra[.]framework[.]matcher[.](ShardingSphereArgumentVerifyMatchers|ShardingSphereAssertionMatchers)" />
+        </module>
+        <module name="RedundantImport" />
+        <module name="UnnecessaryFullyQualifiedType" />
+        <module name="UnusedImports" />
+        <module name="MatchXpath">
+            <property name="query"
+                      value="//DOT[not(ancestor::IMPORT) and ((./IDENT[@text='AccessLevel'] and ./IDENT[@text='lombok']) or (./IDENT[@text='Arrays'] and ./DOT[./IDENT[@text='util'] and ./IDENT[@text='java']]) or (./IDENT[@text='Collectors'] and ./DOT[./IDENT[@text='stream'] and ./DOT[./IDENT[@text='util'] and ./IDENT[@text='java']]]) or (./IDENT[@text=('Types', 'Time', 'Timestamp')] and ./DOT[./IDENT[@text='sql'] and ./IDENT[@text='java']]) or (./IDENT[@text='Date'] and ./DOT[./IDENT[@text='sql'] and ./IDENT[@text='java']] and ancestor::COMPILATION_UNIT/IMPORT/DOT[./IDENT[@text='Date'] and ./DOT[./IDENT[@text='sql'] and ./IDENT[@text='java']]]))]" />
+            <message key="matchxpath.match" value="Import and use the simple type name instead of a package-qualified type name." />
         </module>
         
         <!-- Javadoc Comments -->
         <module name="AtclauseOrder">
-            <property name="tagOrder" value="@param, @return, @throws, @deprecated"/>
+            <property name="tagOrder" value="@param, @return, @throws, @deprecated" />
         </module>
-        <module name="NonEmptyAtclauseDescription"/>
-        <module name="JavadocParagraph"/>
-        <module name="JavadocStyle"/>
-        <module name="JavadocTagContinuationIndentation"/>
-        <module name="SingleLineJavadoc"/>
-        <module name="SummaryJavadoc"/>
-        <!--
-        <module name="JavadocType">
-            <property name="scope" value="public"/>
-        </module>
-        -->
+        <module name="InvalidJavadocPosition" />
+        <module name="JavadocBlockTagLocation" />
+        <module name="JavadocContentLocation" />
         <module name="JavadocMethod">
-            <property name="scope" value="public"/>
-            <property name="allowedAnnotations" value="Override, Test, Before, After, BeforeClass, AfterClass, Parameterized, Parameters"/>
-            <property name="ignoreMethodNamesRegex" value="^assert.*$|^verify.*$"/>
-            <property name="tokens" value="METHOD_DEF, ANNOTATION_FIELD_DEF"/>
+            <property name="allowedAnnotations" value="Override, Test, BeforeEach, AfterEach, BeforeAll, AfterAll, ParameterizedTest, RepeatedTest, TestFactory, TestTemplate" />
+            <property name="validateThrows" value="true" />
+            <property name="tokens" value="METHOD_DEF, ANNOTATION_FIELD_DEF" />
+        </module>
+        <module name="JavadocMissingLeadingAsterisk" />
+        <module name="JavadocMissingWhitespaceAfterAsterisk" />
+        <module name="JavadocTagContinuationIndentation">
+            <property name="violateExecutionOnNonTightHtml" value="true" />
+        </module>
+        <module name="JavadocType" />
+        <module name="MissingJavadocMethod">
+            <property name="allowedAnnotations" value="Override, Test, BeforeEach, AfterEach, BeforeAll, AfterAll, ParameterizedTest, RepeatedTest, TestFactory, TestTemplate" />
+            <property name="allowMissingPropertyJavadoc" value="true" />
+            <property name="tokens" value="METHOD_DEF" />
+        </module>
+        <module name="MissingJavadocPackage" />
+        <module name="NonEmptyAtclauseDescription">
+            <property name="violateExecutionOnNonTightHtml" value="true" />
+        </module>
+        <module name="SingleLineJavadoc">
+            <property name="violateExecutionOnNonTightHtml" value="true" />
+            <property name="ignoreInlineTags" value="false" />
+        </module>
+        <module name="SummaryJavadoc">
+            <property name="violateExecutionOnNonTightHtml" value="true" />
         </module>
         
-        <!-- Filters -->
-        <module name="SuppressionCommentFilter"/>
-        <module name="SuppressWithNearbyCommentFilter"/>
+        <!-- Metrics -->
+        <module name="BooleanExpressionComplexity">
+            <property name="severity" value="warning" />
+        </module>
+        <module name="ClassDataAbstractionCoupling">
+            <property name="severity" value="warning" />
+            <property name="max" value="10" />
+        </module>
+        <module name="ClassFanOutComplexity">
+            <property name="severity" value="warning" />
+        </module>
+        <module name="CyclomaticComplexity">
+            <property name="severity" value="warning" />
+        </module>
+        <module name="JavaNCSS">
+            <property name="severity" value="warning" />
+        </module>
+        <module name="NPathComplexity">
+            <property name="severity" value="warning" />
+        </module>
+        
+        <!-- Miscellaneous -->
+        <module name="ArrayTypeStyle" />
+        <module name="AvoidEscapedUnicodeCharacters" />
+        <module name="CommentsIndentation" />
+        <module name="DescendantToken">
+            <property name="tokens" value="QUESTION" />
+            <property name="limitedTokens" value="QUESTION" />
+            <property name="maximumNumber" value="1" />
+            <property name="maximumMessage" value="Nested ternary operators are forbidden." />
+        </module>
+        <module name="FinalParameters">
+            <property name="tokens" value="METHOD_DEF, CTOR_DEF, LITERAL_CATCH" />
+        </module>
+        <module name="Indentation">
+            <property name="arrayInitIndent" value="2" />
+            <property name="lineWrappingIndentation" value="8" />
+        </module>
+        <module name="MultilineCommentLeadingAsteriskPresence" />
+        <module name="NoCodeInFile" />
+        <module name="OuterTypeFilename" />
+        <module name="TodoComment" />
+        <module name="TrailingComment" />
+        <module name="UncommentedMain">
+            <property name="excludedClasses" value="\.Bootstrap$|ShardingSphereVersion$" />
+        </module>
+        <module name="UpperEll" />
+        
+        <!-- Modifiers -->
+        <module name="ModifierOrder" />
+        <module name="RedundantModifier" />
+        
+        <!-- Naming Conventions -->
+        <module name="AbbreviationAsWordInName">
+            <property name="allowedAbbreviationLength" value="8" />
+        </module>
+        <module name="CatchParameterName">
+            <property name="format" value="^(ex|[a-z][a-z][a-zA-Z]+)$"/>
+        </module>
+        <module name="ClassTypeParameterName" />
+        <module name="ConstantName" />
+        <module name="InterfaceTypeParameterName" />
+        <module name="LambdaParameterName" />
+        <module name="LocalFinalVariableName" />
+        <module name="LocalVariableName" />
+        <module name="MemberName" />
+        <module name="MethodName" />
+        <module name="MethodTypeParameterName" />
+        <module name="PackageName">
+            <property name="format" value="^[a-z]+(\.[a-z][a-z0-9]*)*$" />
+        </module>
+        <module name="ParameterName" />
+        <module name="PatternVariableName" />
+        <module name="RecordComponentName" />
+        <module name="RecordTypeParameterName" />
+        <module name="StaticVariableName" />
+        <module name="TypeName" />
+        <module name="TypeName">
+            <property name="id" value="UtilityTypeName" />
+            <property name="format" value="^(?!.*Util$).*$" />
+            <message key="name.invalidPattern" value="Use the Utils suffix instead of Util for type name ''{0}''." />
+        </module>
+        
+        <!-- Size Violations -->
+        <module name="AnonInnerLength">
+            <property name="max" value="30" />
+        </module>
+        <module name="ExecutableStatementCount">
+            <property name="severity" value="warning" />
+            <property name="max" value="50" />
+        </module>
+        <module name="LambdaBodyLength">
+            <property name="max" value="50" />
+        </module>
+        <module name="MethodCount">
+            <property name="severity" value="warning" />
+        </module>
+        <module name="MethodLength" />
+        <module name="OuterTypeNumber" />
+        <module name="RecordComponentNumber" />
+        
+        <!-- Whitespace -->
+        <module name="EmptyForInitializerPad" />
+        <module name="EmptyForIteratorPad" />
+        <module name="EmptyLineSeparator">
+            <property name="allowMultipleEmptyLines" value="false" />
+            <property name="allowMultipleEmptyLinesInsideClassMembers" value="false" />
+        </module>
+        <module name="GenericWhitespace" />
+        <module name="MethodParamPad" />
+        <module name="NoLineWrap" />
+        <module name="NoWhitespaceAfter" />
+        <module name="NoWhitespaceBefore" />
+        <module name="NoWhitespaceBeforeCaseDefaultColon" />
+        <module name="OperatorWrap" />
+        <module name="ParenPad" />
+        <module name="SeparatorWrap">
+            <property name="id" value="SeparatorWrapDot" />
+            <property name="tokens" value="DOT" />
+            <property name="option" value="nl" />
+        </module>
+        <module name="SeparatorWrap">
+            <property name="id" value="SeparatorWrapComma" />
+            <property name="tokens" value="COMMA" />
+            <property name="option" value="EOL" />
+        </module>
+        <module name="SeparatorWrap">
+            <property name="id" value="SeparatorWrapEllipsis" />
+            <property name="tokens" value="ELLIPSIS" />
+            <property name="option" value="EOL" />
+        </module>
+        <module name="SeparatorWrap">
+            <property name="id" value="SeparatorWrapArrayDeclarator" />
+            <property name="tokens" value="ARRAY_DECLARATOR" />
+            <property name="option" value="EOL" />
+        </module>
+        <module name="SeparatorWrap">
+            <property name="id" value="SeparatorWrapMethodRef" />
+            <property name="tokens" value="METHOD_REF" />
+            <property name="option" value="nl" />
+        </module>
+        <module name="SingleSpaceSeparator">
+            <property name="validateComments" value="true" />
+        </module>
+        <module name="TypecastParenPad" />
+        <module name="WhitespaceAfter" />
+        <module name="WhitespaceAround" />
     </module>
 </module>

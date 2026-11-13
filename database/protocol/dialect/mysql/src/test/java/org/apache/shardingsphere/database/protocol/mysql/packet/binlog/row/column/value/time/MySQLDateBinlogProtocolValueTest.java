@@ -1,0 +1,89 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.database.protocol.mysql.packet.binlog.row.column.value.time;
+
+import io.netty.buffer.ByteBuf;
+import org.apache.shardingsphere.database.protocol.mysql.packet.binlog.row.column.MySQLBinlogColumnDef;
+import org.apache.shardingsphere.database.protocol.mysql.payload.MySQLPacketPayload;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.sql.Date;
+import java.time.LocalDate;
+import java.util.Locale;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class MySQLDateBinlogProtocolValueTest {
+    
+    @Mock
+    private MySQLPacketPayload payload;
+    
+    @Mock
+    private ByteBuf byteBuf;
+    
+    @Mock
+    private MySQLBinlogColumnDef columnDef;
+    
+    @Test
+    void assertRead() {
+        when(payload.getByteBuf()).thenReturn(byteBuf);
+        when(byteBuf.readUnsignedMediumLE()).thenReturn(1901 * 16 * 32 + 32 + 1);
+        Date expected = Date.valueOf(LocalDate.of(1901, 1, 1));
+        assertThat(new MySQLDateBinlogProtocolValue().read(columnDef, payload), is(expected));
+    }
+    
+    @Test
+    void assertReadDateWithZeroMonth() {
+        when(payload.getByteBuf()).thenReturn(byteBuf);
+        when(byteBuf.readUnsignedMediumLE()).thenReturn(2023 * 16 * 32 + 15);
+        assertThat(new MySQLDateBinlogProtocolValue().read(columnDef, payload), is("2023-00-15"));
+    }
+    
+    @Test
+    void assertReadDateWithZeroDay() {
+        when(payload.getByteBuf()).thenReturn(byteBuf);
+        when(byteBuf.readUnsignedMediumLE()).thenReturn(2023 * 16 * 32 + 5 * 32);
+        assertThat(new MySQLDateBinlogProtocolValue().read(columnDef, payload), is("2023-05-00"));
+    }
+    
+    @Test
+    void assertReadDateWithZeroMonthUnderNonLatinDefaultFormatLocale() {
+        when(payload.getByteBuf()).thenReturn(byteBuf);
+        when(byteBuf.readUnsignedMediumLE()).thenReturn(2023 * 16 * 32 + 15);
+        Locale originalLocale = Locale.getDefault(Locale.Category.FORMAT);
+        Locale.setDefault(Locale.Category.FORMAT, Locale.forLanguageTag("th-TH-u-nu-thai"));
+        try {
+            assertThat(new MySQLDateBinlogProtocolValue().read(columnDef, payload), is("2023-00-15"));
+        } finally {
+            Locale.setDefault(Locale.Category.FORMAT, originalLocale);
+        }
+    }
+    
+    @Test
+    void assertReadNullDate() {
+        when(payload.getByteBuf()).thenReturn(byteBuf);
+        when(byteBuf.readUnsignedMediumLE()).thenReturn(0);
+        assertThat(new MySQLDateBinlogProtocolValue().read(columnDef, payload), is(MySQLTimeValueUtils.ZERO_OF_DATE));
+    }
+}

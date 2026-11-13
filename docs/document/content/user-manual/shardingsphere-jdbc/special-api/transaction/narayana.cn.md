@@ -3,18 +3,24 @@ title = "Narayana 事务"
 weight = 5
 +++
 
-## 引入 Maven 依赖
+## 背景信息
+
+Apache ShardingSphere 提供 XA 事务，集成了 Narayana 的实现。
+
+## 前提条件
+
+引入 Maven 依赖
 
 ```xml
 <properties>
-    <narayana.version>5.9.1.Final</narayana.version>
-    <jboss-transaction-spi.version>7.6.0.Final</jboss-transaction-spi.version>
+    <narayana.version>5.12.7.Final</narayana.version>
+    <jboss-transaction-spi.version>7.6.1.Final</jboss-transaction-spi.version>
     <jboss-logging.version>3.2.1.Final</jboss-logging.version>
 </properties>
 
 <dependency>
     <groupId>org.apache.shardingsphere</groupId>
-    <artifactId>shardingsphere-jdbc-core</artifactId>
+    <artifactId>shardingsphere-jdbc</artifactId>
     <version>${shardingsphere.version}</version>
 </dependency>
 
@@ -51,38 +57,54 @@ weight = 5
        <version>${jboss-logging.version}</version>
 </dependency>
 ```
+## 操作步骤
 
-## 定制化配置项
+1. 配置 Narayana
+2. 设置 XA 事务类型
+
+## 配置示例
+
+### 配置 Narayana
 
 可以通过在项目的 classpath 中添加 `jbossts-properties.xml` 来定制化 Narayana 配置项。
 
-详情请参见 [Narayana 官方文档](https://narayana.io/documentation/index.html)。
+详情请参见 [Narayana 官方文档](https://narayana.io/documentation/) 。
 
-## 设置 XA 事务管理类型
+对于 `jbossts-properties.xml` 的最小配置，ShardingSphere 要求定义 Narayana 的 `CoreEnvironmentBean.nodeIdentifier` 属性。
+如果 Narayana 的 object store 并非在不同的 Narayana 实例之间共享，你可以将此值设置为 `1`。一个可能的 `jbossts-properties.xml` 配置如下，
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+    <entry key="CoreEnvironmentBean.nodeIdentifier">1</entry>
+</properties>
+```
+
+在特定情况下，你可能不会希望使用 XML 文件，那你需要在自有 Java 项目的启动类手动设置 `CoreEnvironmentBean.nodeIdentifier`。
+可参考如下方法调用 Narayana Java API。
+
+```java
+import com.arjuna.ats.arjuna.common.CoreEnvironmentBeanException;
+import com.arjuna.ats.arjuna.common.arjPropertyManager;
+
+public class ExampleUtils {
+    public void initNarayanaInstance() {
+        try {
+            arjPropertyManager.getCoreEnvironmentBean().setNodeIdentifier("1");
+        } catch (CoreEnvironmentBeanException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
+```
+
+### 设置 XA 事务类型
 
 Yaml:
 
 ```yaml
-- !TRANSACTION
+transaction:
   defaultType: XA
   providerType: Narayana
-```
-
-SpringBoot:
-
-```yaml
-spring:
-  shardingsphere:
-    props:
-      xa-transaction-manager-type: Narayana
-```
-
-Spring Namespace:
-
-```xml
-<shardingsphere:data-source id="xxx" data-source-names="xxx" rule-refs="xxx">
-    <props>
-        <prop key="xa-transaction-manager-type">Narayana</prop>
-    </props>
-</shardingsphere:data-source>
 ```

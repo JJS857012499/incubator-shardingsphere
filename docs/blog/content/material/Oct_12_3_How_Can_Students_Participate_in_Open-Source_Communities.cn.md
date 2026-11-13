@@ -1,5 +1,6 @@
 +++
 title = "趣说开源｜学生如何参与开源社区？"
+translationKey = "Oct_12_3_How_Can_Students_Participate_in_Open_Source_Communities"
 weight = 19
 chapter = true
 +++
@@ -20,7 +21,7 @@ chapter = true
 
 * 获得奖学金
 
-##下一个问题就是如何利用这些具有吸引力的项目加入开源中？
+## 下一个问题就是如何利用这些具有吸引力的项目加入开源中？
 
 虽然基本过程大体相同，但不同项目有不同规则，有些规则往往是明确的，即：
 

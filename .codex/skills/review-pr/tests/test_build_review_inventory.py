@@ -1,0 +1,84 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+from argparse import Namespace
+from pathlib import Path
+from unittest.mock import patch
+
+
+SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+import build_review_inventory as inventory
+import resolve_review_scope as common
+
+
+class BuildReviewInventoryTest(unittest.TestCase):
+
+    @patch.object(inventory, "run_git")
+    @patch.object(inventory, "get_repo_root", return_value=Path("/repo"))
+    def test_build_inventory_uses_triple_dot_scope(self, _, run_git):
+        run_git.side_effect = [
+            "base-sha\n",
+            "head-sha\n",
+            "merge-base\n",
+            "M\tsrc/main/java/Foo.java\nA\tdocs/guide.md\n",
+            " M unrelated.java\n",
+        ]
+        args = Namespace(base_ref="base", head_ref="head", previous_head=None, github_files=None, candidate_files=None)
+        actual = inventory.build_inventory(args)
+        self.assertEqual("merge-base", actual["scope"]["merge_base"])
+        self.assertEqual(2, actual["scope"]["changed_file_count"])
+        self.assertEqual(1, actual["dirty_worktree"]["count"])
+        self.assertEqual("src/main/java/Foo.java", actual["changed_files_by_category"]["production-java"][0]["path"])
+        run_git.assert_any_call(["diff", "--name-status", "merge-base..head"], Path("/repo"))
+
+    @patch.object(inventory, "resolve_candidate_changes")
+    @patch.object(inventory, "run_git")
+    @patch.object(inventory, "get_repo_root", return_value=Path("/repo"))
+    def test_build_inventory_uses_exact_candidate_files(self, _, run_git, resolve_candidate_changes):
+        run_git.side_effect = ["base-sha\n", "head-sha\n", "merge-base\n", " M unrelated.java\n"]
+        resolve_candidate_changes.return_value = [common.ChangedFile(status="M", path="AGENTS.md")]
+        args = Namespace(base_ref="base", head_ref="head", previous_head=None, github_files=None, candidate_files="candidate.txt")
+        actual = inventory.build_inventory(args)
+        self.assertEqual(1, actual["scope"]["changed_file_count"])
+        self.assertEqual({"provided": True}, actual["scope"]["candidate_files"])
+        self.assertEqual("AGENTS.md", actual["changed_files_by_category"]["docs"][0]["path"])
+        resolve_candidate_changes.assert_called_once_with(Path("/repo"), "merge-base", "candidate.txt")
+
+    def test_default_review_commands_leave_no_repository_bytecode(self):
+        for script_name in ("build_review_inventory.py", "manage_review_ledger.py"):
+            with self.subTest(script=script_name), tempfile.TemporaryDirectory() as temp_dir:
+                scripts = Path(temp_dir) / ".codex/skills/review-pr/scripts"
+                scripts.mkdir(parents=True)
+                for name in (script_name, "resolve_review_scope.py"):
+                    (scripts / name).write_bytes((SCRIPTS_DIR / name).read_bytes())
+                environment = {key: value for key, value in os.environ.items() if key not in {"PYTHONDONTWRITEBYTECODE", "PYTHONPYCACHEPREFIX"}}
+                process = subprocess.run([sys.executable, str(scripts / script_name), "--help"], cwd=temp_dir, env=environment,
+                                         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=20)
+                self.assertIn("usage:", process.stdout)
+                self.assertEqual([], list(scripts.rglob("__pycache__")))
+
+
+if __name__ == "__main__":
+    unittest.main()

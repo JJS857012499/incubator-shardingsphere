@@ -1,65 +1,129 @@
 +++
 title = "混合规则"
-weight = 6
+weight = 10
 +++
 
-混合配置的规则项之间的叠加使用是通过数据源名称和表名称关联的。
+## 背景信息
 
-如果前一个规则是面向数据源聚合的，下一个规则在配置数据源时，则需要使用前一个规则配置的聚合后的逻辑数据源名称；
-同理，如果前一个规则是面向表聚合的，下一个规则在配置表时，则需要使用前一个规则配置的聚合后的逻辑表名称。
+ShardingSphere 涵盖了很多功能，例如，分库分片、读写分离、数据加密等。这些功能用户可以单独进行使用，也可以配合一起使用，下面是基于 YAML 的参数解释和配置示例。
 
-## 配置项说明
+## 参数解释
 
-```yml
-dataSources: # 配置真实存在的数据源作为名称
-  write_ds:
-    # ...省略具体配置
-  read_ds_0:
-    # ...省略具体配置
-  read_ds_1:
-    # ...省略具体配置
-
+```yaml
 rules:
-  - !SHARDING # 配置数据分片规则
-    tables:
-      t_user:
-        actualDataNodes: ds.t_user_${0..1} # 数据源名称 `ds` 使用读写分离配置的逻辑数据源名称
-        tableStrategy:
-          standard:
-            shardingColumn: user_id
-            shardingAlgorithmName: t_user_inline
-    shardingAlgorithms:
-      t_user_inline:
-        type: INLINE
-        props:
-          algorithm-expression: t_user_${user_id % 2}
-  
-  - !ENCRYPT # 配置数据加密规则
-    tables:
-      t_user: # 表名称 `t_user` 使用数据分片配置的逻辑表名称
-        columns:
-          pwd:
-            plainColumn: plain_pwd
-            cipherColumn: cipher_pwd
-            encryptorName: encryptor_aes
-    encryptors:
-      encryptor_aes:
-        type: aes
-        props:
-          aes-key-value: 123456abc
-  
-  - !READWRITE_SPLITTING # 配置读写分离规则
-    dataSources:
-      ds: # 读写分离的逻辑数据源名称 `ds` 用于在数据分片中使用
-        writeDataSourceName: write_ds # 使用真实存在的数据源名称 `write_ds`
-        readDataSourceNames:
-          - read_ds_0 # 使用真实存在的数据源名称 `read_ds_0`
-          - read_ds_1 # 使用真实存在的数据源名称 `read_ds_1`
-        loadBalancerName: roundRobin
-    loadBalancers:
-      roundRobin:
-        type: ROUND_ROBIN
+- !SHARDING
+  tables:
+    <logic_table_name>: # 逻辑表名称:
+      actualDataNodes: # 由逻辑数据源名 + 表名组成（参考 Inline 语法规则）
+      tableStrategy: # 分表策略，同分库策略
+        standard:
+          shardingColumn: # 分片列名称
+          shardingAlgorithmName: # 分片算法名称
+  defaultDatabaseStrategy:
+    standard:
+      shardingColumn: # 分片列名称
+      shardingAlgorithmName: # 分片算法名称
+  keyGenerateStrategies:
+    <key_generate_strategy_name> (+): # 分布式序列策略名称
+      keyGenerateType: # 分布式序列策略类型
+      keyGeneratorName: # 分布式序列算法名称
+      logicTable: # 逻辑表名称，keyGenerateType 为 column 时需要配置
+      keyGenerateColumn: # 自增列名称，keyGenerateType 为 column 时需要配置
+      keyGenerateSequence: # 序列名称，keyGenerateType 为 sequence 时需要配置
+  shardingAlgorithms:
+    <sharding_algorithm_name>: # 分片算法名称
+      type: INLINE
+      props:
+        algorithm-expression: # INLINE 表达式
+    t_order_inline:
+      type: INLINE
+      props:
+        algorithm-expression: # INLINE 表达式
+  keyGenerators:
+    <key_generate_algorithm_name> (+): # 分布式序列算法名称
+      type: # 分布式序列算法类型
+      props: # 分布式序列算法属性配置
+- !ENCRYPT
+  encryptors:
+    <encrypt_algorithm_name> (+): # 加解密算法名称
+      type: # 加解密算法类型
+      props: # 加解密算法属性配置
+    <encrypt_algorithm_name> (+): # 加解密算法名称
+      type: # 加解密算法类型
+  tables:
+    <table_name>: # 加密表名称
+      columns:
+        <column_name> (+): # 加密列名称
+          cipher:
+            name: # 密文列名称
+            encryptorName: # 密文列加密算法名称
+          assistedQuery (?):
+            name: # 查询辅助列名称
+            encryptorName:  # 查询辅助列加密算法名称
+          likeQuery (?):
+            name: # 模糊查询列名称
+            encryptorName:  # 模糊查询列加密算法名称
+```
 
-props:
-  sql-show: true
+## 配置示例
+
+```yaml
+rules:
+- !SHARDING
+  tables:
+    t_order:
+      actualDataNodes: replica_ds_${0..1}.t_order_${0..1}
+      tableStrategy:
+        standard:
+          shardingColumn: order_id
+          shardingAlgorithmName: t_order_inline
+  defaultDatabaseStrategy:
+    standard:
+      shardingColumn: user_id
+      shardingAlgorithmName: database_inline
+  keyGenerateStrategies:
+    t_order_order_id:
+      keyGenerateType: column
+      keyGeneratorName: snowflake
+      logicTable: t_order
+      keyGenerateColumn: order_id
+  shardingAlgorithms:
+    database_inline:
+      type: INLINE
+      props:
+        algorithm-expression: replica_ds_${user_id % 2}
+    t_order_inline:
+      type: INLINE
+      props:
+        algorithm-expression: t_order_${order_id % 2}
+    t_order_item_inline:
+      type: INLINE
+      props:
+        algorithm-expression: t_order_item_${order_id % 2}
+  keyGenerators:
+    snowflake:
+      type: SNOWFLAKE
+- !ENCRYPT
+  encryptors:
+    aes_encryptor:
+      type: AES
+      props:
+        aes-key-value: 123456abc
+        digest-algorithm-name: SHA-1
+    assisted_encryptor:
+      type: MD5
+  tables:
+    t_encrypt:
+      columns:
+        user_id:
+          cipher:
+            name: user_cipher
+            encryptorName: aes_encryptor
+          assistedQuery:
+            name: assisted_query_user
+            encryptorName: assisted_encryptor
+        order_id:
+          cipher:
+            name: order_cipher
+            encryptorName: aes_encryptor
 ```

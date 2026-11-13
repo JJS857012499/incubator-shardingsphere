@@ -1,6 +1,6 @@
 +++
 title = "YAML Configuration"
-weight = 2
+weight = 1
 chapter = true
 +++
 
@@ -8,6 +8,9 @@ chapter = true
 
 YAML configuration provides interaction with ShardingSphere JDBC through configuration files.
 When used with the governance module together, the configuration of persistence in the configuration center is YAML format.
+
+Note:
+The YAML configuration file supports more than 3MB of configuration content.
 
 YAML configuration is the most common configuration mode, which can omit the complexity of programming and simplify user configuration.
 
@@ -18,22 +21,21 @@ YAML configuration is the most common configuration mode, which can omit the com
 ```xml
 <dependency>
     <groupId>org.apache.shardingsphere</groupId>
-    <artifactId>shardingsphere-jdbc-core</artifactId>
+    <artifactId>shardingsphere-jdbc</artifactId>
     <version>${shardingsphere.version}</version>
 </dependency>
 ```
 
 ### YAML Format
 
-ShardingSphere-JDBC YAML file consists of schema name, mode configuration, data source map, rule configurations and properties.
+ShardingSphere-JDBC YAML file consists of database name, mode configuration, data source map, rule configurations and properties.
 
 Note: The example connection pool is HikariCP, which can be replaced with other connection pools according to business scenarios.
 
 ```yaml
-# Alias of the datasource in JDBC.
-# Through this parameter to connect, ShardingSphere-JDBC and ShardingSphere-Proxy.
+# JDBC logic database name. Through this parameter to connect ShardingSphere-JDBC and ShardingSphere-Proxy.
 # Default value: logic_db
-schemaName (?):
+databaseName (?):
 
 mode:
 
@@ -50,11 +52,11 @@ props:
   key_2: value_2
 ```
 
-Please refer to [Mode Confiugration](/en/user-manual/shardingsphere-jdbc/yaml/mode) for more mode details.
+Please refer to [Mode Configuration](/en/user-manual/shardingsphere-jdbc/yaml-config/mode) for more mode details.
 
-Please refer to [Data Source Confiugration](/en/user-manual/shardingsphere-jdbc/yaml/data-source) for more data source details.
+Please refer to [Data Source Configuration](/en/user-manual/shardingsphere-jdbc/yaml-config/data-source) for more data source details.
 
-Please refer to [Rules Confiugration](/en/user-manual/shardingsphere-jdbc/yaml/rules) for more rule details.
+Please refer to [Rules Configuration](/en/user-manual/shardingsphere-jdbc/yaml-config/rules) for more rule details.
 
 ### Create Data Source
 

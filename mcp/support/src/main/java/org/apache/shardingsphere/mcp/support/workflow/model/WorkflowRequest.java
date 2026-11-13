@@ -1,0 +1,269 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.mcp.support.workflow.model;
+
+import lombok.Getter;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+
+/**
+ * Workflow request.
+ */
+@Getter
+public class WorkflowRequest {
+    
+    private String planId = "";
+    
+    private String database = "";
+    
+    private String schema = "";
+    
+    private String table = "";
+    
+    private String column = "";
+    
+    private String operationType = "";
+    
+    private String naturalLanguageIntent = "";
+    
+    private String deliveryMode = WorkflowLifecycle.DELIVERY_MODE_ALL_AT_ONCE;
+    
+    private String executionMode = WorkflowLifecycle.EXECUTION_MODE_REVIEW_THEN_EXECUTE;
+    
+    private String algorithmType = "";
+    
+    private final Map<String, String> primaryAlgorithmProperties = new LinkedHashMap<>();
+    
+    private final Map<String, SecretReferenceValue> primaryAlgorithmSecretReferences = new LinkedHashMap<>();
+    
+    /**
+     * Create a defensive copy of the workflow request.
+     *
+     * @return copied workflow request
+     */
+    public WorkflowRequest copy() {
+        return copyTo(new WorkflowRequest());
+    }
+    
+    /**
+     * Set plan id.
+     *
+     * @param planId plan id
+     */
+    public void setPlanId(final String planId) {
+        this.planId = normalize(planId);
+    }
+    
+    /**
+     * Set database.
+     *
+     * @param database database
+     */
+    public void setDatabase(final String database) {
+        this.database = normalize(database);
+    }
+    
+    /**
+     * Set schema.
+     *
+     * @param schema schema
+     */
+    public void setSchema(final String schema) {
+        this.schema = normalize(schema);
+    }
+    
+    /**
+     * Set table.
+     *
+     * @param table table
+     */
+    public void setTable(final String table) {
+        this.table = normalize(table);
+    }
+    
+    /**
+     * Set column.
+     *
+     * @param column column
+     */
+    public void setColumn(final String column) {
+        this.column = normalize(column);
+    }
+    
+    /**
+     * Set operation type.
+     *
+     * @param operationType operation type
+     */
+    public void setOperationType(final String operationType) {
+        this.operationType = normalize(operationType);
+    }
+    
+    /**
+     * Set natural language intent.
+     *
+     * @param naturalLanguageIntent natural language intent
+     */
+    public void setNaturalLanguageIntent(final String naturalLanguageIntent) {
+        this.naturalLanguageIntent = normalize(naturalLanguageIntent);
+    }
+    
+    /**
+     * Set delivery mode.
+     *
+     * @param deliveryMode delivery mode
+     */
+    public void setDeliveryMode(final String deliveryMode) {
+        this.deliveryMode = normalize(deliveryMode);
+    }
+    
+    /**
+     * Set execution mode.
+     *
+     * @param executionMode execution mode
+     */
+    public void setExecutionMode(final String executionMode) {
+        this.executionMode = normalize(executionMode);
+    }
+    
+    /**
+     * Set algorithm type.
+     *
+     * @param algorithmType algorithm type
+     */
+    public void setAlgorithmType(final String algorithmType) {
+        this.algorithmType = normalize(algorithmType);
+    }
+    
+    /**
+     * Merge the current workflow request into the previous request.
+     *
+     * @param previous previous workflow request
+     * @param current current workflow request
+     * @return merged workflow request
+     */
+    public static WorkflowRequest merge(final WorkflowRequest previous, final WorkflowRequest current) {
+        if (null == previous) {
+            return current.copy();
+        }
+        WorkflowRequest result = previous.copy();
+        current.overlayTo(result);
+        return result;
+    }
+    
+    /**
+     * Copy workflow request fields to the target request.
+     *
+     * @param source source request
+     * @param target target request
+     * @param <T> target request type
+     * @return target request
+     */
+    public static <T extends WorkflowRequest> T copyFieldsTo(final WorkflowRequest source, final T target) {
+        return null == source ? target : source.copyTo(target);
+    }
+    
+    /**
+     * Get algorithm properties.
+     *
+     * @param algorithmRole algorithm role
+     * @return algorithm properties
+     */
+    public Map<String, String> getAlgorithmProperties(final String algorithmRole) {
+        return "primary".equals(algorithmRole) ? primaryAlgorithmProperties : Map.of();
+    }
+    
+    /**
+     * Get secret references by algorithm role.
+     *
+     * @return secret references by algorithm role
+     */
+    public Map<String, Map<String, SecretReferenceValue>> getSecretReferences() {
+        if (primaryAlgorithmSecretReferences.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Map<String, SecretReferenceValue>> result = new LinkedHashMap<>(1, 1F);
+        result.put("primary", primaryAlgorithmSecretReferences);
+        return result;
+    }
+    
+    /**
+     * Get secret references.
+     *
+     * @param algorithmRole algorithm role
+     * @return secret references
+     */
+    public Map<String, SecretReferenceValue> getSecretReferences(final String algorithmRole) {
+        return "primary".equals(algorithmRole) ? primaryAlgorithmSecretReferences : Map.of();
+    }
+    
+    /**
+     * Copy current request values to the target request.
+     *
+     * @param target target request
+     * @param <T> target request type
+     * @return target request
+     */
+    protected final <T extends WorkflowRequest> T copyTo(final T target) {
+        target.setPlanId(planId);
+        target.setDatabase(database);
+        target.setSchema(schema);
+        target.setTable(table);
+        target.setColumn(column);
+        target.setOperationType(operationType);
+        target.setNaturalLanguageIntent(naturalLanguageIntent);
+        target.setDeliveryMode(deliveryMode);
+        target.setExecutionMode(executionMode);
+        target.setAlgorithmType(algorithmType);
+        target.getPrimaryAlgorithmProperties().putAll(primaryAlgorithmProperties);
+        target.getPrimaryAlgorithmSecretReferences().putAll(primaryAlgorithmSecretReferences);
+        return target;
+    }
+    
+    /**
+     * Overlay current non-empty values onto the target request.
+     *
+     * @param target target request
+     */
+    protected final void overlayTo(final WorkflowRequest target) {
+        if (!planId.isEmpty()) {
+            target.setPlanId(planId);
+        }
+        target.setDatabase(resolveValue(target.getDatabase(), database));
+        target.setSchema(resolveValue(target.getSchema(), schema));
+        target.setTable(resolveValue(target.getTable(), table));
+        target.setColumn(resolveValue(target.getColumn(), column));
+        target.setOperationType(resolveValue(target.getOperationType(), operationType));
+        target.setNaturalLanguageIntent(resolveValue(target.getNaturalLanguageIntent(), naturalLanguageIntent));
+        target.setDeliveryMode(resolveValue(target.getDeliveryMode(), deliveryMode));
+        target.setExecutionMode(resolveValue(target.getExecutionMode(), executionMode));
+        target.setAlgorithmType(resolveValue(target.getAlgorithmType(), algorithmType));
+        target.getPrimaryAlgorithmProperties().putAll(primaryAlgorithmProperties);
+        target.getPrimaryAlgorithmSecretReferences().putAll(primaryAlgorithmSecretReferences);
+    }
+    
+    private String resolveValue(final String previousValue, final String currentValue) {
+        return !currentValue.isEmpty() ? currentValue : previousValue;
+    }
+    
+    private String normalize(final String value) {
+        return Objects.toString(value, "").trim();
+    }
+}

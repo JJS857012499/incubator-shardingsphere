@@ -1,0 +1,429 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.shardingsphere.single.datanode;
+
+import ch.qos.logback.classic.Level;
+import org.apache.shardingsphere.database.connector.core.metadata.data.loader.type.SchemaMetaDataLoader;
+import org.apache.shardingsphere.database.connector.core.metadata.database.metadata.DialectDatabaseMetaData;
+import org.apache.shardingsphere.database.connector.core.metadata.identifier.DefaultSchemaNameResolver;
+import org.apache.shardingsphere.database.connector.core.type.DatabaseType;
+import org.apache.shardingsphere.database.connector.core.type.DatabaseTypeRegistry;
+import org.apache.shardingsphere.infra.database.DatabaseTypeEngine;
+import org.apache.shardingsphere.infra.datanode.DataNode;
+import org.apache.shardingsphere.infra.exception.kernel.metadata.datanode.InvalidDataNodeFormatException;
+import org.apache.shardingsphere.infra.rule.ShardingSphereRule;
+import org.apache.shardingsphere.infra.rule.attribute.RuleAttributes;
+import org.apache.shardingsphere.infra.rule.attribute.table.TableMapperRuleAttribute;
+import org.apache.shardingsphere.infra.spi.type.typed.TypedSPILoader;
+import org.apache.shardingsphere.single.exception.SingleTablesLoadingException;
+import org.apache.shardingsphere.test.infra.fixture.jdbc.MockedDataSource;
+import org.apache.shardingsphere.test.infra.framework.extension.log.LogCaptureAssertion;
+import org.apache.shardingsphere.test.infra.framework.extension.log.LogCaptureExtension;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.MockedConstruction;
+import org.mockito.MockedStatic;
+
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Optional;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(LogCaptureExtension.class)
+class SingleTableDataNodeLoaderTest {
+    
+    private final DatabaseType databaseType = TypedSPILoader.getService(DatabaseType.class, "FIXTURE");
+    
+    private final DatabaseType protocolDatabaseType = TypedSPILoader.getService(DatabaseType.class, "Oracle");
+    
+    private final DatabaseType schemaAvailableProtocolDatabaseType = TypedSPILoader.getService(DatabaseType.class, "PostgreSQL");
+    
+    private final DatabaseType storageDatabaseType = TypedSPILoader.getService(DatabaseType.class, "MySQL");
+    
+    private Map<String, DataSource> dataSourceMap;
+    
+    @BeforeEach
+    void setUp() throws SQLException {
+        dataSourceMap = new LinkedHashMap<>(2, 1F);
+        dataSourceMap.put("foo_ds", mockDataSource("foo_ds", Arrays.asList("foo_tbl1", "foo_tbl2")));
+        dataSourceMap.put("bar_ds", mockDataSource("bar_ds", Arrays.asList("bar_tbl1", "bar_tbl2")));
+    }
+    
+    private DataSource mockDataSource(final String dataSourceName, final List<String> tableNames) throws SQLException {
+        return mockDataSource(dataSourceName, null, "jdbc:mock://127.0.0.1/" + dataSourceName, tableNames);
+    }
+    
+    private DataSource mockDataSource(final String dataSourceName, final String schemaName, final String url, final List<String> tableNames) throws SQLException {
+        Connection connection = mock(Connection.class, RETURNS_DEEP_STUBS);
+        when(connection.getCatalog()).thenReturn(dataSourceName);
+        when(connection.getMetaData().getURL()).thenReturn(url);
+        if (null == schemaName) {
+            ResultSet tableResultSet = mockResultSet(tableNames);
+            when(connection.getMetaData().getTables(dataSourceName, null, null, new String[]{"TABLE", "PARTITIONED TABLE", "VIEW", "SYSTEM TABLE", "SYSTEM VIEW"}))
+                    .thenReturn(tableResultSet);
+        } else {
+            ResultSet schemaResultSet = mockSchemaResultSet(schemaName);
+            ResultSet tableResultSet = mockResultSet(tableNames);
+            when(connection.getMetaData().getSchemas()).thenReturn(schemaResultSet);
+            when(connection.getMetaData().getTables(dataSourceName, schemaName, null, new String[]{"TABLE", "PARTITIONED TABLE", "VIEW", "SYSTEM TABLE", "SYSTEM VIEW"}))
+                    .thenReturn(tableResultSet);
+        }
+        return new MockedDataSource(connection);
+    }
+    
+    private ResultSet mockResultSet(final List<String> tableNames) throws SQLException {
+        ResultSet result = mock(ResultSet.class);
+        String firstTableName = tableNames.get(0);
+        Collection<String> remainTableNames = tableNames.subList(1, tableNames.size());
+        Collection<Boolean> remainNextResults = remainTableNames.stream().map(each -> true).collect(Collectors.toList());
+        remainNextResults.add(false);
+        when(result.next()).thenReturn(true, remainNextResults.toArray(new Boolean[tableNames.size()]));
+        when(result.getString("TABLE_NAME")).thenReturn(firstTableName, remainTableNames.toArray(new String[tableNames.size() - 1]));
+        return result;
+    }
+    
+    private ResultSet mockSchemaResultSet(final String schemaName) throws SQLException {
+        ResultSet result = mock(ResultSet.class);
+        when(result.next()).thenReturn(true, false);
+        when(result.getString("TABLE_SCHEM")).thenReturn(schemaName);
+        return result;
+    }
+    
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("loadWithConfiguredTableExpressionArguments")
+    void assertLoadWithConfiguredTableExpressions(final String name, final Collection<ShardingSphereRule> builtRules,
+                                                  final Collection<String> configuredTables, final Map<String, Collection<String>> expectedTableDataSources) {
+        Map<String, Collection<DataNode>> actual = SingleTableDataNodeLoader.load("foo_db", databaseType, dataSourceMap, builtRules, configuredTables);
+        assertThat(new TreeSet<>(actual.keySet()), is(new TreeSet<>(expectedTableDataSources.keySet())));
+        assertTableDataSources(actual, expectedTableDataSources);
+    }
+    
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("loadWithConfiguredTableMapRuleArguments")
+    void assertLoadWithConfiguredTableMapRules(final String name, final Collection<String> configuredTables, final Map<String, Collection<String>> expectedTableDataSources) {
+        Map<String, Collection<DataNode>> actual = SingleTableDataNodeLoader.load("foo_db", databaseType, dataSourceMap, Collections.emptyList(), configuredTables);
+        assertThat(new TreeSet<>(actual.keySet()), is(new TreeSet<>(expectedTableDataSources.keySet())));
+        assertTableDataSources(actual, expectedTableDataSources);
+    }
+    
+    private void assertTableDataSources(final Map<String, Collection<DataNode>> actual, final Map<String, Collection<String>> expectedTableDataSources) {
+        for (Entry<String, Collection<String>> entry : expectedTableDataSources.entrySet()) {
+            Collection<String> actualDataSourceNames = actual.get(entry.getKey()).stream().map(DataNode::getDataSourceName).collect(Collectors.toCollection(TreeSet::new));
+            assertThat(actualDataSourceNames, is(new TreeSet<>(entry.getValue())));
+        }
+    }
+    
+    @Test
+    void assertLoadWithFeatureRequiredSingleTables() {
+        Map<String, Collection<DataNode>> actual = SingleTableDataNodeLoader.load(
+                "foo_db", databaseType, dataSourceMap, Collections.singleton(createRule(Collections.emptyList(), Collections.singleton("foo_tbl1"))), Collections.singleton("foo_ds.foo_tbl2"));
+        assertTrue(actual.containsKey("foo_tbl1"));
+        assertTrue(actual.containsKey("foo_tbl2"));
+        assertFalse(actual.containsKey("bar_tbl1"));
+        assertThat(actual.get("foo_tbl1").iterator().next().getDataSourceName(), is("foo_ds"));
+        assertThat(actual.get("foo_tbl2").iterator().next().getDataSourceName(), is("foo_ds"));
+    }
+    
+    @Test
+    void assertLoadWithFeatureRequiredSingleTablesAndSingleDataSource() {
+        Map<String, DataSource> localDataSourceMap = new LinkedHashMap<>(1, 1F);
+        localDataSourceMap.put("foo_ds", dataSourceMap.get("foo_ds"));
+        Map<String, Collection<DataNode>> actual = SingleTableDataNodeLoader.load(
+                "foo_db", databaseType, localDataSourceMap, Collections.singleton(createRule(Collections.emptyList(), Collections.singleton("foo_tbl1"))), Collections.singleton("foo_ds.foo_tbl2"));
+        assertTrue(actual.containsKey("foo_tbl1"));
+        assertTrue(actual.containsKey("foo_tbl2"));
+        assertThat(actual.get("foo_tbl1").iterator().next().getDataSourceName(), is("foo_ds"));
+        assertThat(actual.get("foo_tbl2").iterator().next().getDataSourceName(), is("foo_ds"));
+    }
+    
+    @Test
+    void assertLoadExactTablesWhenSchemaIsUnavailable() {
+        Map<String, Collection<String>> fooSchemaTableNames = new LinkedHashMap<>(2, 1F);
+        fooSchemaTableNames.put("bar_schema", Collections.singleton("FOO_TBL1"));
+        fooSchemaTableNames.put("dbo", Collections.singleton("foo_tbl2"));
+        Map<String, Collection<String>> barSchemaTableNames = Collections.singletonMap("dbo", Arrays.asList("bar_tbl1", "bar_tbl2"));
+        DialectDatabaseMetaData dialectDatabaseMetaData = mock(DialectDatabaseMetaData.class, RETURNS_DEEP_STUBS);
+        when(dialectDatabaseMetaData.getSchemaOption().getDefaultSchema()).thenReturn(Optional.of("dbo"));
+        when(dialectDatabaseMetaData.getSchemaOption().isSchemaAvailable()).thenReturn(false);
+        try (
+                MockedStatic<DatabaseTypeEngine> databaseTypeEngine = mockStatic(DatabaseTypeEngine.class);
+                MockedConstruction<DatabaseTypeRegistry> ignoredRegistry = mockConstruction(DatabaseTypeRegistry.class,
+                        (mock, context) -> when(mock.getDialectDatabaseMetaData()).thenReturn(dialectDatabaseMetaData));
+                MockedConstruction<SchemaMetaDataLoader> ignored = mockConstruction(SchemaMetaDataLoader.class,
+                        (mock, context) -> when(mock.loadSchemaTableNames(anyString(), any(DataSource.class), anyCollection(), anyCollection()))
+                                .thenAnswer(invocation -> dataSourceMap.get("foo_ds") == invocation.getArgument(1) ? fooSchemaTableNames : barSchemaTableNames))) {
+            databaseTypeEngine.when(() -> DatabaseTypeEngine.getStorageType(dataSourceMap.get("foo_ds"))).thenReturn(databaseType);
+            databaseTypeEngine.when(() -> DatabaseTypeEngine.getStorageType(dataSourceMap.get("bar_ds"))).thenReturn(databaseType);
+            Map<String, Collection<DataNode>> actual = SingleTableDataNodeLoader.load(
+                    "foo_db", databaseType, dataSourceMap, Collections.emptyList(), Arrays.asList("foo_ds.foo_tbl1", "bar_ds.*"));
+            assertThat(new TreeSet<>(actual.keySet()), is(new TreeSet<>(Arrays.asList("FOO_TBL1", "bar_tbl1", "bar_tbl2"))));
+        }
+    }
+    
+    @Test
+    void assertLoadWithSameTableInDifferentSchemas() {
+        Collection<String> configuredTables = Collections.singleton("foo_ds.target_schema.same_tbl");
+        assertTrue(SingleTableDataNodeLoader.load("foo_db", databaseType, dataSourceMap, Collections.emptyList(), configuredTables).isEmpty());
+    }
+    
+    @Test
+    void assertLoadWithSameTableInDifferentDataSources(final LogCaptureAssertion logCaptureAssertion) throws SQLException {
+        Map<String, DataSource> localDataSourceMap = new LinkedHashMap<>(2, 1F);
+        localDataSourceMap.put("foo_ds", mockDataSource("foo_ds", Collections.singletonList("same_tbl")));
+        localDataSourceMap.put("bar_ds", mockDataSource("bar_ds", Collections.singletonList("same_tbl")));
+        Map<String, Collection<DataNode>> actual = SingleTableDataNodeLoader.load(
+                "foo_db", databaseType, localDataSourceMap, Collections.emptyList(), Arrays.asList("foo_ds.same_tbl", "bar_ds.same_tbl"));
+        assertThat(actual.get("same_tbl").size(), is(2));
+        logCaptureAssertion.assertLogCount(1);
+        logCaptureAssertion.assertLogContent(0, Level.WARN,
+                "Single table 'same_tbl' is loaded from multiple storage units [foo_ds, bar_ds] in database 'foo_db'.", true);
+    }
+    
+    @Test
+    void assertLoadWithSameTableInDifferentSchemasOfSameDataSource(final LogCaptureAssertion logCaptureAssertion) {
+        Map<String, DataSource> localDataSourceMap = Collections.singletonMap("foo_ds", dataSourceMap.get("foo_ds"));
+        Map<String, Collection<String>> schemaTableNames = new LinkedHashMap<>(2, 1F);
+        schemaTableNames.put("foo_schema", Collections.singleton("same_tbl"));
+        schemaTableNames.put("bar_schema", Collections.singleton("same_tbl"));
+        try (
+                MockedConstruction<SchemaMetaDataLoader> ignored = mockConstruction(SchemaMetaDataLoader.class,
+                        (mock, context) -> when(mock.loadSchemaTableNames("foo_db", localDataSourceMap.get("foo_ds"), Collections.emptySet(), Collections.emptySet())).thenReturn(schemaTableNames))) {
+            Map<String, Collection<DataNode>> actual = SingleTableDataNodeLoader.load(
+                    "foo_db", databaseType, localDataSourceMap, Collections.emptyList(), Collections.singleton("*.*.*"));
+            assertThat(actual.get("same_tbl").size(), is(2));
+            logCaptureAssertion.assertLogCount(0);
+        }
+    }
+    
+    @Test
+    void assertLoadWithDataSourceMapDoesNotWarn(final LogCaptureAssertion logCaptureAssertion) throws SQLException {
+        Map<String, DataSource> localDataSourceMap = new LinkedHashMap<>(2, 1F);
+        localDataSourceMap.put("foo_ds", mockDataSource("foo_ds", Collections.singletonList("same_tbl")));
+        localDataSourceMap.put("bar_ds", mockDataSource("bar_ds", Collections.singletonList("same_tbl")));
+        Map<String, Collection<DataNode>> actual = SingleTableDataNodeLoader.load(
+                "foo_db", localDataSourceMap, Collections.emptySet(), Collections.emptySet(), createStorageTypes(localDataSourceMap));
+        assertThat(actual.get("same_tbl").size(), is(2));
+        logCaptureAssertion.assertLogCount(0);
+    }
+    
+    @Test
+    void assertLoadWithEmptyConfiguredTablesAndFeatureRequiredSingleTables() {
+        assertTrue(SingleTableDataNodeLoader.load(
+                "foo_db", databaseType, dataSourceMap, Collections.singleton(createRule(Collections.emptyList(), Collections.singleton("foo_tbl1"))), Collections.emptyList()).isEmpty());
+    }
+    
+    @Test
+    void assertLoadWithDataSourceMap() {
+        Map<String, Collection<DataNode>> actual =
+                SingleTableDataNodeLoader.load("foo_db", dataSourceMap, Collections.emptySet(), Collections.singleton("foo_tbl2"), createStorageTypes(dataSourceMap));
+        assertThat(new TreeSet<>(actual.keySet()), is(new TreeSet<>(Arrays.asList("foo_tbl1", "bar_tbl1", "bar_tbl2"))));
+        assertThat(new TreeSet<>(actual.get("bar_tbl1").stream().map(DataNode::getDataSourceName).collect(Collectors.toList())), is(new TreeSet<>(Collections.singleton("bar_ds"))));
+    }
+    
+    @Test
+    void assertLoadWithDataSourceMapPreservesCaseSensitiveTableNames() throws SQLException {
+        Map<String, DataSource> localDataSourceMap = new LinkedHashMap<>(1, 1F);
+        localDataSourceMap.put("foo_ds", mockDataSource("foo_ds", Arrays.asList("Test3", "test3")));
+        Map<String, Collection<DataNode>> actual = SingleTableDataNodeLoader.load("foo_db", localDataSourceMap, Collections.emptySet(), Collections.emptySet(), createStorageTypes(localDataSourceMap));
+        assertTrue(actual.containsKey("Test3"));
+        assertTrue(actual.containsKey("test3"));
+        assertThat(actual.get("Test3").iterator().next().getTableName(), is("Test3"));
+        assertThat(actual.get("test3").iterator().next().getTableName(), is("test3"));
+    }
+    
+    @Test
+    void assertLoadWithDataSourceMapPreservesCaseSensitiveDataNodes() throws SQLException {
+        Map<String, DataSource> localDataSourceMap = new LinkedHashMap<>(2, 1F);
+        localDataSourceMap.put("foo_ds", mockDataSource("foo_ds", Collections.singletonList("foo_tbl")));
+        localDataSourceMap.put("FOO_DS", mockDataSource("FOO_DS", Collections.singletonList("foo_tbl")));
+        Map<String, Collection<DataNode>> actual = SingleTableDataNodeLoader.load("foo_db", localDataSourceMap, Collections.emptySet(), Collections.emptySet(), createStorageTypes(localDataSourceMap));
+        assertThat(actual.get("foo_tbl").size(), is(2));
+        assertThat(actual.get("foo_tbl").stream().map(DataNode::getDataSourceName).collect(Collectors.toCollection(LinkedHashSet::new)),
+                is(new LinkedHashSet<>(Arrays.asList("foo_ds", "FOO_DS"))));
+    }
+    
+    @Test
+    void assertLoadWithDifferentProtocolAndStorageTypes() throws SQLException {
+        Map<String, DataSource> localDataSourceMap = new LinkedHashMap<>(1, 1F);
+        localDataSourceMap.put("foo_ds", mockDataSource("foo_ds", Collections.singletonList("foo_tbl1")));
+        try (MockedStatic<DatabaseTypeEngine> databaseTypeEngine = mockStatic(DatabaseTypeEngine.class)) {
+            databaseTypeEngine.when(() -> DatabaseTypeEngine.getStorageType(localDataSourceMap.get("foo_ds"))).thenReturn(storageDatabaseType);
+            Map<String, Collection<DataNode>> actual = SingleTableDataNodeLoader.load(
+                    "foo_db", protocolDatabaseType, localDataSourceMap, Collections.emptyList(), Collections.singleton("foo_ds.foo_tbl1"));
+            assertTrue(actual.containsKey("foo_tbl1"));
+            assertThat(actual.get("foo_tbl1"), is(Collections.singletonList(new DataNode("foo_ds", "foo_db", "foo_tbl1"))));
+        }
+    }
+    
+    @Test
+    void assertLoadWithStorageSchemaCasePolicy() throws SQLException {
+        Map<String, DataSource> localDataSourceMap = Collections.singletonMap("foo_ds", mockDataSource("foo_ds", Collections.singletonList("foo_tbl1")));
+        try (
+                MockedStatic<DatabaseTypeEngine> databaseTypeEngine = mockStatic(DatabaseTypeEngine.class);
+                MockedStatic<DefaultSchemaNameResolver> defaultSchemaNameResolver = mockStatic(DefaultSchemaNameResolver.class)) {
+            databaseTypeEngine.when(() -> DatabaseTypeEngine.getStorageType(localDataSourceMap.get("foo_ds"))).thenReturn(storageDatabaseType);
+            defaultSchemaNameResolver.when(() -> DefaultSchemaNameResolver.resolveStorage(storageDatabaseType, localDataSourceMap.get("foo_ds"), "Foo_DB")).thenReturn("foo_db");
+            Map<String, Collection<DataNode>> actual = SingleTableDataNodeLoader.load(
+                    "Foo_DB", protocolDatabaseType, localDataSourceMap, Collections.emptyList(), Collections.singleton("foo_ds.foo_tbl1"));
+            assertThat(actual.get("foo_tbl1"), is(Collections.singletonList(new DataNode("foo_ds", "foo_db", "foo_tbl1"))));
+        }
+    }
+    
+    @Test
+    void assertLoadWithDottedTableName() throws SQLException {
+        DataSource dataSource = mock(DataSource.class);
+        Map<String, DataSource> localDataSourceMap = Collections.singletonMap("foo_ds", dataSource);
+        Map<String, Collection<String>> schemaTableNames = Collections.singletonMap("foo_db", Collections.singleton("foo_tbl.part.item"));
+        try (
+                MockedStatic<DatabaseTypeEngine> databaseTypeEngine = mockStatic(DatabaseTypeEngine.class);
+                MockedStatic<DefaultSchemaNameResolver> defaultSchemaNameResolver = mockStatic(DefaultSchemaNameResolver.class);
+                MockedConstruction<SchemaMetaDataLoader> schemaMetaDataLoader = mockConstruction(SchemaMetaDataLoader.class,
+                        (mock, context) -> when(mock.loadSchemaTableNames(anyString(), any(DataSource.class), anyCollection(), anyCollection())).thenReturn(schemaTableNames))) {
+            databaseTypeEngine.when(() -> DatabaseTypeEngine.getStorageType(dataSource)).thenReturn(storageDatabaseType);
+            defaultSchemaNameResolver.when(() -> DefaultSchemaNameResolver.resolveStorage(storageDatabaseType, dataSource, "foo_db")).thenReturn("foo_db");
+            Map<String, Collection<DataNode>> actual = SingleTableDataNodeLoader.load(
+                    "foo_db", schemaAvailableProtocolDatabaseType, localDataSourceMap, Collections.emptyList(), Collections.singleton("foo_ds.foo_tbl.part.item"));
+            assertThat(actual.get("foo_tbl.part.item"), is(Collections.singletonList(new DataNode("foo_ds", "foo_db", "foo_tbl.part.item"))));
+            verify(schemaMetaDataLoader.constructed().get(0)).loadSchemaTableNames(
+                    "foo_db", dataSource, Collections.singleton("foo_tbl.part.item"), Collections.emptySet());
+        }
+    }
+    
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("invalidConfiguredTableArguments")
+    void assertLoadWithInvalidConfiguredTable(final String name, final boolean schemaAvailable, final String configuredTable) {
+        DataSource dataSource = mock(DataSource.class);
+        Map<String, DataSource> localDataSourceMap = Collections.singletonMap("foo_ds", dataSource);
+        DialectDatabaseMetaData dialectDatabaseMetaData = mock(DialectDatabaseMetaData.class, RETURNS_DEEP_STUBS);
+        when(dialectDatabaseMetaData.getSchemaOption().isSchemaAvailable()).thenReturn(schemaAvailable);
+        try (
+                MockedStatic<DatabaseTypeEngine> databaseTypeEngine = mockStatic(DatabaseTypeEngine.class);
+                MockedConstruction<DatabaseTypeRegistry> ignored = mockConstruction(
+                        DatabaseTypeRegistry.class, (mock, context) -> when(mock.getDialectDatabaseMetaData()).thenReturn(dialectDatabaseMetaData))) {
+            databaseTypeEngine.when(() -> DatabaseTypeEngine.getStorageType(dataSource)).thenReturn(storageDatabaseType);
+            assertThrows(InvalidDataNodeFormatException.class, () -> SingleTableDataNodeLoader.load(
+                    "foo_db", storageDatabaseType, localDataSourceMap, Collections.emptyList(), Collections.singleton(configuredTable)));
+        }
+    }
+    
+    @Test
+    void assertLoadSchemaTableNames() {
+        Map<String, Collection<String>> actual = SingleTableDataNodeLoader.loadSchemaTableNames("foo_db", databaseType, dataSourceMap.get("foo_ds"), "foo_ds",
+                Collections.emptySet(), Collections.singleton("foo_tbl2"));
+        assertThat(new TreeSet<>(actual.keySet()), is(new TreeSet<>(Collections.singleton("foo_db"))));
+        assertThat(new TreeSet<>(actual.get("foo_db")), is(new TreeSet<>(Collections.singleton("foo_tbl1"))));
+    }
+    
+    @Test
+    void assertLoadSchemaTableNamesWithSQLException() throws SQLException {
+        SQLException expected = new SQLException("mocked_ex");
+        DataSource dataSource = mock(DataSource.class);
+        when(dataSource.getConnection()).thenThrow(expected);
+        SingleTablesLoadingException actual = assertThrows(SingleTablesLoadingException.class,
+                () -> SingleTableDataNodeLoader.loadSchemaTableNames("foo_db", databaseType, dataSource, "foo_ds", Collections.emptySet(), Collections.emptySet()));
+        assertThat(actual.getCause(), is(expected));
+    }
+    
+    private static Stream<Arguments> loadWithConfiguredTableExpressionArguments() {
+        Map<String, Collection<String>> excludedTablesExpectedDataSources = new LinkedHashMap<>(2, 1F);
+        excludedTablesExpectedDataSources.put("foo_tbl2", Collections.singleton("foo_ds"));
+        excludedTablesExpectedDataSources.put("bar_tbl2", Collections.singleton("bar_ds"));
+        Map<String, Collection<String>> allSchemaTablesExpectedDataSources = new LinkedHashMap<>(4, 1F);
+        allSchemaTablesExpectedDataSources.put("foo_tbl1", Collections.singleton("foo_ds"));
+        allSchemaTablesExpectedDataSources.put("foo_tbl2", Collections.singleton("foo_ds"));
+        allSchemaTablesExpectedDataSources.put("bar_tbl1", Collections.singleton("bar_ds"));
+        allSchemaTablesExpectedDataSources.put("bar_tbl2", Collections.singleton("bar_ds"));
+        return Stream.of(
+                Arguments.arguments("empty configured tables", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()),
+                Arguments.arguments("all tables with excluded tables", Collections.singleton(createRule(Arrays.asList("foo_tbl1", "bar_tbl1", "unused_tbl"), Collections.emptyList())),
+                        Collections.singleton("*.*"), createExpectedTableDataSources(excludedTablesExpectedDataSources)),
+                Arguments.arguments("all schema tables", Collections.emptyList(), Collections.singleton("*.*.*"), createExpectedTableDataSources(allSchemaTablesExpectedDataSources)));
+    }
+    
+    private static Stream<Arguments> invalidConfiguredTableArguments() {
+        return Stream.of(
+                Arguments.arguments("schema-aware dotted table", true, "foo_ds.foo_schema.foo.part"),
+                Arguments.arguments("blank dotted segment", false, "foo_ds.\t.foo"),
+                Arguments.arguments("unknown storage unit with dotted table", false, "bar_ds.foo.part.item"));
+    }
+    
+    private static ShardingSphereRule createRule(final Collection<String> distributedTableNames, final Collection<String> enhancedTableNames) {
+        ShardingSphereRule result = mock(ShardingSphereRule.class);
+        TableMapperRuleAttribute ruleAttribute = mock(TableMapperRuleAttribute.class);
+        when(ruleAttribute.getDistributedTableNames()).thenReturn(distributedTableNames);
+        when(ruleAttribute.getActualTableNames()).thenReturn(Collections.emptyList());
+        when(ruleAttribute.getEnhancedTableNames()).thenReturn(enhancedTableNames);
+        when(result.getAttributes()).thenReturn(new RuleAttributes(ruleAttribute));
+        return result;
+    }
+    
+    private static Stream<Arguments> loadWithConfiguredTableMapRuleArguments() {
+        return Stream.of(
+                Arguments.arguments("configured data source not found", Collections.singleton("other_ds.foo_tbl2"), Collections.emptyMap()),
+                Arguments.arguments("configured wildcard schema", Collections.singleton("foo_ds.*.foo_tbl2"), Collections.emptyMap()),
+                Arguments.arguments("configured schema not matched", Collections.singleton("foo_ds.other_schema.foo_tbl2"), Collections.emptyMap()),
+                Arguments.arguments("configured table wildcard", Collections.singleton("foo_ds.foo_db.*"), Collections.emptyMap()));
+    }
+    
+    private Map<String, DatabaseType> createStorageTypes(final Map<String, DataSource> dataSources) {
+        Map<String, DatabaseType> result = new LinkedHashMap<>(dataSources.size(), 1F);
+        for (String each : dataSources.keySet()) {
+            result.put(each, databaseType);
+        }
+        return result;
+    }
+    
+    private static Map<String, Collection<String>> createExpectedTableDataSources(final Map<String, Collection<String>> tableDataSources) {
+        Map<String, Collection<String>> result = new LinkedHashMap<>(tableDataSources.size(), 1F);
+        for (Entry<String, Collection<String>> each : tableDataSources.entrySet()) {
+            result.put(each.getKey(), new LinkedHashSet<>(each.getValue()));
+        }
+        return result;
+    }
+}

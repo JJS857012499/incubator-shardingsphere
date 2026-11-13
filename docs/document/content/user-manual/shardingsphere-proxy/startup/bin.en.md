@@ -3,54 +3,91 @@ title = "Use Binary Tar"
 weight = 1
 +++
 
-## Startup Steps
+## Background
 
-1. Download the latest version of ShardingSphere-Proxy.
-1. After the decompression, revise `conf/server.yaml` and documents begin with `config-` prefix, `conf/config-xxx.yaml` for example, to configure sharding rules and readwrite-splitting rules. Please refer to [Configuration Manual](/en/user-manual/shardingsphere-proxy/yaml-config/) for the configuration method.
-1. Please run `bin/start.sh` for Linux operating system; run `bin/start.bat` for Windows operating system to start ShardingSphere-Proxy. To configure start port and document location, please refer to [Quick Start](/en/quick-start/shardingsphere-proxy-quick-start/).
+This section describes how to start ShardingSphere-Proxy by binary release packages
 
-## Using database protocol
+## Premise
 
-### Using PostgreSQL
+Start the Proxy with a binary package requires an environment with Java JRE 8 or later.
 
-1. Use any PostgreSQL terminal to connect, such as `psql -U root -h 127.0.0.1 -p 3307`.
+## Steps
 
-### Using MySQL
+1. Obtain the binary release package of ShardingSphere-Proxy
 
-1. Copy MySQL's JDBC driver to folder `ext-lib/`.
-1. Use any MySQL terminal to connect, such as `mysql -u root -h 127.0.0.1 -P 3307`.
+Obtain the binary release package of ShardingSphere-Proxy on the [download page](https://shardingsphere.apache.org/document/current/en/downloads/).
 
-### Using openGauss
+Notice: The `lib` directory in the binary release package only contains the dependencies required for the default startup.
+Some optional plugin jars are shipped in the `opt-lib` directory, but they are not loaded by default.
+To enable such plugins, copy the corresponding jars from `opt-lib` to `ext-lib` first, then add the required third-party dependencies.
 
-1. Copy openGauss's JDBC driver whose package prefixed with `org.opengauss` to folder `ext-lib/`.
-1. Use any openGauss terminal to connect, such as `gsql -U root -h 127.0.0.1 -p 3307`.
+2. Configure `conf/global.yaml`
 
-## Using metadata persist repository
+ShardingSphere-Proxy's operational mode is configured on `global.yaml`, and its configuration mode is the same with that of ShardingSphere-JDBC. Refer to [mode of configuration](/en/user-manual/shardingsphere-jdbc/yaml-config/mode/).
 
-### Using ZooKeeper
+Please refer to the following links for other configuration items:
+* [Permission configuration](/en/user-manual/shardingsphere-proxy/yaml-config/authority/)
+* [Property configuration](/en/user-manual/shardingsphere-proxy/yaml-config/props/)
 
-Integrated ZooKeeper Curator client by default.
+3. Configure `conf/database-*.yaml`
 
-### Using Etcd
+Modify files named with the prefix `database-` in the `conf` directory, such as `conf/database-sharding.yaml` file and configure sharding rules and read/write splitting rules. See [Configuration Manual](/en/user-manual/shardingsphere-proxy/yaml-config/) for configuration methods. The `*` part of the `database-*.yaml` file can be named whatever you want.
 
-1. Copy Etcd's client driver to folder `ext-lib/`.
+ShardingSphere-Proxy supports multiple logical data sources. Each YAML configuration file named with the prefix `database-` is a logical data source.
 
-## Using Distributed Transaction
+4. Introduce database driver (Optional)
 
-Same with ShardingSphere-JDBC.
-please refer to [Distributed Transaction](/en/user-manual/shardingsphere-jdbc/special-api/transaction/) for more details.
+If the backend is connected to a PostgreSQL, openGauss or Firebird database, no additional dependencies need to be introduced.
 
-## Using user-defined algorithm
+If the backend is connected to a MySQL database, please download [mysql-connector-j-8.4.0.jar](https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar), and put it into the `ext-lib` directory.
 
-When developer need to use user-defined algorithm, should use the way below to configure algorithm, use sharding algorithm as example. 
+5. Introduce dependencies required by the cluster mode (Optional)
 
-1. Implement `ShardingAlgorithm` interface.
-1. Package Java file to jar.
-1. Copy jar to ShardingSphere-Proxy's `ext-lib/` folder.
-1. Configure user-defined Java class into YAML file. Please refer to [Configuration Manual](/en/user-manual/shardingsphere-proxy/yaml-config/) for more details.
+ShardingSphere-Proxy integrates the ZooKeeper Curator client by default. ZooKeeper is used in cluster mode without introducing other dependencies.
 
-## Notices
+If the cluster mode uses Etcd, please copy [vertx-grpc 4.5.1](https://repo1.maven.org/maven2/io/vertx/vertx-grpc/4.5.1/vertx-grpc-4.5.1.jar) and [vertx-core 4.5.1](https://repo1.maven.org/maven2/io/vertx/vertx-core/4.5.1/vertx-core-4.5.1.jar) that Etcd depends on into the `ext-lib` directory.
 
-1. ShardingSphere-Proxy uses `3307` port in default. Users can start the script parameter as the start port number, like `bin/start.sh 3308`.
-1. ShardingSphere-Proxy uses `conf/server.yaml` to configure the registry center, authentication information and public properties.
-1. ShardingSphere-Proxy supports multi-logic data sources, with each yaml configuration document named by `config-` prefix as a logic data source.
+6. Introduce dependencies required by distributed transactions (Optional)
+
+It is the same with ShardingSphere-JDBC.
+Please refer to [Distributed Transaction](/en/user-manual/shardingsphere-jdbc/special-api/transaction/) for more details.
+If Seata AT mode is used, copy the jars under `opt-lib/seata-at` to `ext-lib` first, then add Seata Client and its extra dependencies.
+
+7. Introduce custom algorithm (Optional)
+
+If you need to use a user-defined algorithm class, you can configure custom algorithm in the following ways:
+
+    1. Implement the algorithm implementation class defined by `ShardingAlgorithm`.
+    2. Create a `META-INF/services` directory under the project `resources` directory.
+    3. Create file `org.apache.shardingsphere.sharding.spi.ShardingAlgorithm` under the directory `META-INF/services`.
+    4. Writes the fully qualified class name of the implementation class to a file `org.apache.shardingsphere.sharding.spi.ShardingAlgorithm`
+    5. Package the above Java files into jar packages.
+    6. Copy the above jar package to the `ext-lib` directory.
+    7. Configure the Java file reference of the above custom algorithm implementation class in a YAML file, see [Configuration rule](/en/user-manual/shardingsphere-proxy/yaml-config/) for more details.
+
+8. Start ShardingSphere-Proxy
+
+In Linux or macOS, run `bin/start.sh`. In Windows, run `bin/start.bat` to start ShardingSphere-Proxy. The default listening port is `3307` and the default configuration directory is the `conf` directory in Proxy. The startup script can specify the listening port and the configuration file directory by running the following command:
+
+```bash
+bin/start.sh [port] [/path/to/conf]
+```
+
+9. Connect ShardingSphere-Proxy with client
+
+Run the MySQL/PostgreSQL/openGauss client command to directly operate ShardingSphere-Proxy.
+
+Connect ShardingSphere-Proxy with MySQL client:
+```bash
+mysql -h${proxy_host} -P${proxy_port} -u${proxy_username} -p${proxy_password}
+```
+
+Connect ShardingSphere-Proxy with PostgreSQL:
+```bash 
+psql -h ${proxy_host} -p ${proxy_port} -U ${proxy_username}
+```
+
+Connect ShardingSphere-Proxy with openGauss client:
+```bash 
+gsql -r -h ${proxy_host} -p ${proxy_port} -U ${proxy_username} -W ${proxy_password}
+```
